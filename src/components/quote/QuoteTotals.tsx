@@ -7,14 +7,19 @@
  * rate line and the PDF footnote.
  */
 
-import { Minus, Plus } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2, Minus, PackageCheck, Plus } from "lucide-react";
 import { SHOP_CONFIG } from "@/data/shop-config";
 import { useShop } from "@/context/ShopContext";
 import { useSourcing } from "@/context/SourcingContext";
 import { formatPrice } from "@/lib/format";
 
 export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
+  const router = useRouter();
   const { profile } = useShop();
+  const [placing, setPlacing] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
   const {
     quoteItems,
     laborHours,
@@ -90,6 +95,47 @@ export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
     contextProvider.onQuoteComplete(quoteItems);
   }
 
+  async function handlePlaceOrder() {
+    if (!profile || quoteItems.length === 0 || !vehicleSelected) return;
+    setPlacing(true);
+    setPlaceError(null);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopId: profile.shopName,
+          vehicle: { year: year as number, make, model },
+          lines: quoteItems.map((qi) => ({
+            offerId: qi.offerId,
+            partName: qi.partName,
+            partNumber: qi.partNumber,
+            brand: qi.brand,
+            gradeTier: qi.gradeTier,
+            condition: qi.condition ?? "new",
+            qty: qi.qty,
+            unitPrice: qi.price,
+            deliveryDays: qi.deliveryDays,
+            marketBaseline: qi.marketBaseline ?? null,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      contextProvider.onQuoteComplete(quoteItems);
+      clearQuote();
+      router.push("/orders");
+    } catch (err) {
+      setPlaceError(
+        err instanceof Error ? err.message : "Couldn't place the order"
+      );
+    } finally {
+      setPlacing(false);
+    }
+  }
+
   return (
     <>
       {/* Labor */}
@@ -154,10 +200,29 @@ export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
         </div>
       </div>
 
+      {/* Place order */}
+      <button
+        onClick={handlePlaceOrder}
+        disabled={placing || quoteItems.length === 0}
+        className="mt-4 w-full h-11 rounded-lg bg-teal text-white font-medium text-sm hover:bg-teal/90 active:scale-[0.98] transition disabled:opacity-50 inline-flex items-center justify-center gap-2"
+      >
+        {placing ? (
+          <Loader2 size={15} className="animate-spin" />
+        ) : (
+          <PackageCheck size={15} />
+        )}
+        Place Order
+      </button>
+      {placeError && (
+        <p className="mt-1.5 text-[11px] text-red-600 text-center">
+          {placeError}
+        </p>
+      )}
+
       {/* Generate PDF */}
       <button
         onClick={handleGeneratePdf}
-        className="mt-4 w-full h-11 rounded-lg bg-[#1B2838] text-white font-medium text-sm hover:bg-[#1B2838]/90 transition"
+        className="mt-2 w-full h-11 rounded-lg bg-[#1B2838] text-white font-medium text-sm hover:bg-[#1B2838]/90 transition"
       >
         Generate PDF Quote
       </button>

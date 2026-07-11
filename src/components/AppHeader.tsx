@@ -20,8 +20,22 @@ export function AppHeader() {
             {profile?.shopName}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-gray-400 text-sm">
+        <div className="flex items-center gap-4">
+          <nav className="flex items-center gap-3 text-[13px]">
+            <Link
+              href="/orders"
+              className="text-gray-300 hover:text-white transition"
+            >
+              Orders
+            </Link>
+            <Link
+              href="/analytics"
+              className="text-gray-300 hover:text-white transition"
+            >
+              Savings
+            </Link>
+          </nav>
+          <div className="hidden sm:flex items-center gap-1.5 text-gray-400 text-sm">
             <MapPin size={14} />
             <span>{profile?.region}</span>
           </div>

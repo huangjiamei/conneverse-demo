@@ -46,4 +46,13 @@ export type QuoteLine = {
   qty: number;
   option: "A" | "B";
   category: string;
+  // ─── Order-placement context (from the PublicOffer) ───
+  /** Opaque public offer id — the server maps it back to a seller
+   * group when the order is placed. */
+  offerId?: string;
+  gradeTier?: import("./canonical").GradeTier;
+  condition?: string;
+  deliveryDays?: number;
+  /** Like-for-like market alternative captured at search time. */
+  marketBaseline?: import("./canonical").MarketBaseline | null;
 };

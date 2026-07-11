@@ -17,6 +17,7 @@ import { createHash } from "crypto";
 import { store } from "@/lib/api/store";
 import type {
   GradeTier,
+  MarketBaseline,
   PublicOffer,
   PublicSearchResult,
 } from "@/types/canonical";
@@ -138,15 +139,61 @@ function curatedPhotoUrl(offering: Offering): string | null {
   return entry.status === "approved" ? entry.url : null;
 }
 
+/**
+ * The market_snapshot savings baseline: the incumbent-channel
+ * (simulated local-distributor) alternative for the same part in this
+ * SAME search. Like-for-like enforced — same condition, same grade tier
+ * — and conservative: the CHEAPEST qualifying incumbent price. When no
+ * same-tier incumbent exists, the cheapest same-condition incumbent is
+ * returned with its own tier so order placement records the delta as a
+ * tier choice, never as savings.
+ */
+export function computeMarketBaseline(
+  offering: Offering,
+  allCandidates: Offering[],
+  make: string | undefined
+): MarketBaseline | null {
+  const tier = classifyGradeTier(offering.brand, make, offering.condition);
+  const incumbents = allCandidates.filter(
+    (o) =>
+      o.channel === "simulated" &&
+      o.id !== offering.id &&
+      o.condition === offering.condition
+  );
+  if (incumbents.length === 0) return null;
+
+  const withTier = incumbents.map((o) => ({
+    o,
+    tier: classifyGradeTier(o.brand, make, o.condition),
+  }));
+  const sameTier = withTier.filter((x) => x.tier === tier);
+  const pool = sameTier.length > 0 ? sameTier : withTier;
+  const cheapest = pool.reduce((min, x) =>
+    x.o.landedPrice < min.o.landedPrice ? x : min
+  );
+
+  return {
+    price: cheapest.o.landedPrice,
+    gradeTier: cheapest.tier,
+    condition: cheapest.o.condition,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
 // ─── Projection ─────────────────────────────────────────────────────
 
 export function toPublicOffer(
   offering: Offering,
   role: "A" | "B" | "candidate",
-  make: string | undefined
+  make: string | undefined,
+  marketBaseline: MarketBaseline | null = null
 ): PublicOffer {
+  const publicId = opaqueId(offering.id);
+  // Index the opaque id → seller mapping so order placement can group
+  // lines per supplier server-side without exposing seller identity.
+  store.registerOffer(publicId, offering.sellerId, offering.channel);
   return {
-    id: opaqueId(offering.id),
+    id: publicId,
     role,
     partName: offering.partName,
     partNumber: offering.partNumber,
@@ -168,6 +215,7 @@ export function toPublicOffer(
     returnTerms: returnTermsLabel(offering),
     photoUrl: curatedPhotoUrl(offering),
     provisional: offering.reliability.provisional,
+    marketBaseline,
   };
 }
 
@@ -192,16 +240,18 @@ export function toPublicSearchResult(
       : o.id === result.optionB?.id
       ? "B"
       : "candidate";
+  const baselineFor = (o: Offering) =>
+    computeMarketBaseline(o, result.candidates, make);
   const candidates = result.candidates
     .slice(0, GRID_CAP)
-    .map((o) => toPublicOffer(o, roleFor(o), make));
+    .map((o) => toPublicOffer(o, roleFor(o), make, baselineFor(o)));
 
   const projected: PublicSearchResult = {
     optionA: result.optionA
-      ? toPublicOffer(result.optionA, "A", make)
+      ? toPublicOffer(result.optionA, "A", make, baselineFor(result.optionA))
       : null,
     optionB: result.optionB
-      ? toPublicOffer(result.optionB, "B", make)
+      ? toPublicOffer(result.optionB, "B", make, baselineFor(result.optionB))
       : null,
     candidates,
     meta: {

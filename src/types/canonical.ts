@@ -155,6 +155,14 @@ export type PublicOffer = {
   /** New supplier without enough first-party history yet. Surfaced as a
    * subtle qualitative note, never a number. */
   provisional: boolean;
+  /**
+   * The incumbent-channel alternative captured in this same search —
+   * the market_snapshot savings baseline. Same-tier when available
+   * (like-for-like); a different tier is recorded as tierChoiceDelta at
+   * order time, never as savings. Null when no incumbent offered this
+   * part.
+   */
+  marketBaseline: MarketBaseline | null;
 };
 
 /** Client-facing search result: the two picks + anonymized funnel
@@ -207,21 +215,80 @@ export type QuoteRecord = {
   subtotal: number;
 };
 
+// ─── Orders & savings ledger ────────────────────────────────────────
+
+export type OrderStatus =
+  | "ordered"
+  | "shipped"
+  | "delivered"
+  | "installed"
+  | "exception";
+
+/**
+ * Savings-baseline source hierarchy, strictly enforced:
+ *   1. shop_history    — the shop's own avg paid price for the same OE
+ *                        number (CSV import), staleness-decayed: entries
+ *                        older than 6 months don't qualify.
+ *   2. market_snapshot — the incumbent-channel price for the same part,
+ *                        same condition, same grade tier, captured in
+ *                        the SAME search that produced the order.
+ *   3. none            — no like-for-like baseline. Display "—" and
+ *                        EXCLUDE from every savings total.
+ */
+export type BaselineSource = "shop_history" | "market_snapshot" | "none";
+
+export type SavingsBaseline = {
+  baselinePrice: number | null;
+  baselineSource: BaselineSource;
+  baselineTimestamp: string | null;
+  /**
+   * When the chosen part's grade tier differs from the alternative's,
+   * the delta is recorded HERE — a tier choice, never savings.
+   */
+  tierChoiceDelta: number | null;
+};
+
+export type OrderLine = {
+  id: string;
+  partName: string;
+  /** OE / part number — the join key for shop-history baselines. */
+  partNumber: string;
+  brand: string;
+  gradeTier: GradeTier;
+  condition: string;
+  qty: number;
+  /** Per-unit price actually paid. */
+  unitPricePaid: number;
+  baseline: SavingsBaseline;
+};
+
 export type PurchaseOrder = {
   id: string;
   createdAt: string;
-  quoteId: string;
+  quoteId: string | null;
+  shopId: string;
+  vehicle: Vehicle;
   /** Seller the PO is routed to — SERVER-ONLY, never returned to a
-   * client-facing surface. */
+   * client-facing surface. Attribution is "Fulfilled by Conneverse". */
   sellerId: string;
-  status: "created" | "ordered" | "shipped" | "delivered" | "exception";
-  lines: Array<{
-    sku: string;
-    partName: string;
-    qty: number;
-    unitPrice: number;
-  }>;
+  status: OrderStatus;
+  /** Full transition log. Manual (concierge ops) today; the same
+   * append seam is what carrier/supplier webhooks will call. */
+  statusHistory: Array<{ status: OrderStatus; at: string; note?: string }>;
+  /** Promised arrival (ISO date). Drives the delay alert. */
+  etaDate: string;
+  lines: OrderLine[];
 };
 
 /** Client-safe projection of a PurchaseOrder — drops sellerId. */
 export type PublicOrder = Omit<PurchaseOrder, "sellerId">;
+
+/** Like-for-like market alternative captured at search time —
+ * server-computed from the incumbent channel; carries no seller
+ * identity. Feeds the market_snapshot baseline. */
+export type MarketBaseline = {
+  price: number;
+  gradeTier: GradeTier;
+  condition: string;
+  capturedAt: string;
+};

@@ -10,7 +10,42 @@
  */
 
 import { createHash } from "crypto";
-import type { PurchaseOrder, QuoteRecord, Vehicle } from "@/types/canonical";
+import type {
+  OrderStatus,
+  PurchaseOrder,
+  QuoteRecord,
+  Vehicle,
+} from "@/types/canonical";
+
+// ─── Shop history (savings baseline #1) ─────────────────────────────
+//
+// The shop's own paid prices, imported from a CSV shaped like their
+// Parts Daily Report. Entries older than 6 months are staleness-decayed
+// (excluded from baseline computation).
+
+export type ShopHistoryEntry = {
+  id: string;
+  date: string; // ISO
+  oeNumber: string;
+  description: string;
+  brand: string;
+  qty: number;
+  unitPrice: number;
+};
+
+export type ShopHistoryBaseline = {
+  avgPrice: number;
+  entries: number;
+  latest: string;
+};
+
+const SIX_MONTHS_MS = 183 * 24 * 60 * 60 * 1000;
+
+/** Normalize an OE number for history joins (same rule as the OE
+ * resolver): uppercase, strip separators. */
+export function normalizeOeKey(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
 
 /**
  * One confirmed (freeText → partType) pair — future training data for
@@ -113,6 +148,30 @@ export interface DataStore {
   createOrder(order: Omit<PurchaseOrder, "id" | "createdAt">, now: string): PurchaseOrder;
   getOrder(id: string): PurchaseOrder | null;
   listOrders(): PurchaseOrder[];
+  /** Append a status transition — the seam both manual ops updates and
+   * future carrier/supplier webhooks call. Null on unknown order. */
+  applyOrderStatus(
+    orderId: string,
+    status: OrderStatus,
+    now: string,
+    note?: string
+  ): PurchaseOrder | null;
+
+  /** Opaque public offer id → server-side seller identity, written at
+   * projection time so order placement can group lines per supplier
+   * without ever exposing the seller to the client. */
+  registerOffer(opaqueId: string, sellerId: string, channel: string): void;
+  lookupOffer(opaqueId: string): { sellerId: string; channel: string } | null;
+
+  /** Shop-history import + baseline lookup (staleness-decayed). */
+  importShopHistory(
+    entries: Array<Omit<ShopHistoryEntry, "id">>
+  ): number;
+  getShopHistoryBaseline(
+    oeNumber: string,
+    now: string
+  ): ShopHistoryBaseline | null;
+  countShopHistory(): number;
 
   logResolution(
     entry: Omit<ResolutionLogEntry, "id" | "createdAt">,
@@ -160,6 +219,8 @@ class InMemoryStore implements DataStore {
   private oeConsensus = new Map<string, OeConsensusRecord>();
   private photos = new Map<string, PhotoCurationEntry>();
   private choices: ChoiceRecord[] = [];
+  private offerIndex = new Map<string, { sellerId: string; channel: string }>();
+  private shopHistory: ShopHistoryEntry[] = [];
 
   createQuote(
     quote: Omit<QuoteRecord, "id" | "createdAt">,
@@ -193,6 +254,66 @@ class InMemoryStore implements DataStore {
   }
   listOrders(): PurchaseOrder[] {
     return [...this.orders.values()];
+  }
+  applyOrderStatus(
+    orderId: string,
+    status: OrderStatus,
+    now: string,
+    note?: string
+  ): PurchaseOrder | null {
+    const order = this.orders.get(orderId);
+    if (!order) return null;
+    const updated: PurchaseOrder = {
+      ...order,
+      status,
+      statusHistory: [...order.statusHistory, { status, at: now, note }],
+    };
+    this.orders.set(orderId, updated);
+    return updated;
+  }
+
+  registerOffer(opaqueId: string, sellerId: string, channel: string): void {
+    this.offerIndex.set(opaqueId, { sellerId, channel });
+  }
+  lookupOffer(
+    opaqueId: string
+  ): { sellerId: string; channel: string } | null {
+    return this.offerIndex.get(opaqueId) ?? null;
+  }
+
+  importShopHistory(
+    entries: Array<Omit<ShopHistoryEntry, "id">>
+  ): number {
+    for (const e of entries) {
+      this.shopHistory.push({ ...e, id: nextId("sh") });
+    }
+    return entries.length;
+  }
+  getShopHistoryBaseline(
+    oeNumber: string,
+    now: string
+  ): ShopHistoryBaseline | null {
+    const key = normalizeOeKey(oeNumber);
+    if (!key) return null;
+    const cutoff = new Date(now).getTime() - SIX_MONTHS_MS;
+    // Staleness decay: entries older than 6 months never qualify.
+    const fresh = this.shopHistory.filter(
+      (e) =>
+        normalizeOeKey(e.oeNumber) === key &&
+        new Date(e.date).getTime() >= cutoff
+    );
+    if (fresh.length === 0) return null;
+    const totalQty = fresh.reduce((s, e) => s + e.qty, 0) || 1;
+    const avgPrice =
+      fresh.reduce((s, e) => s + e.unitPrice * e.qty, 0) / totalQty;
+    const latest = fresh
+      .map((e) => e.date)
+      .sort()
+      .at(-1)!;
+    return { avgPrice, entries: fresh.length, latest };
+  }
+  countShopHistory(): number {
+    return this.shopHistory.length;
   }
 
   logResolution(

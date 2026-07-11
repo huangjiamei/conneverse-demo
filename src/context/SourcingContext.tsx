@@ -515,6 +515,12 @@ export function SourcingProvider({
             qty: 1,
             option,
             category: part.category,
+            // Order-placement context (opaque; feeds /api/orders).
+            offerId: offering.id,
+            gradeTier: offering.gradeTier,
+            condition: offering.condition,
+            deliveryDays: offering.deliveryEstimate.days,
+            marketBaseline: offering.marketBaseline,
           },
         ];
       });
