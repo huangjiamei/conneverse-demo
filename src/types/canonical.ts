@@ -224,6 +224,30 @@ export type OrderStatus =
   | "installed"
   | "exception";
 
+// ─── Delivery tracker (carrier milestones) ──────────────────────────
+
+/** The 5-stage milestone scale. A given source may support fewer —
+ * the tracker renders ONLY the stages its source can actually report;
+ * stages are never interpolated or faked. */
+export type TrackerStage =
+  | "ordered"
+  | "confirmed"
+  | "in_transit"
+  | "out_for_delivery"
+  | "delivered";
+
+/** One verified carrier/supplier event. The ONLY thing tracker stages
+ * derive from. */
+export type CarrierEvent = {
+  stage: TrackerStage;
+  at: string;
+  /** Last-scan location for credibility ("Oakland, CA"). */
+  location?: string;
+  note?: string;
+};
+
+export type OrderUrgency = "on_lift" | "scheduled";
+
 /**
  * Savings-baseline source hierarchy, strictly enforced:
  *   1. shop_history    — the shop's own avg paid price for the same OE
@@ -260,6 +284,9 @@ export type OrderLine = {
   /** Per-unit price actually paid. */
   unitPricePaid: number;
   baseline: SavingsBaseline;
+  /** Demo-catalog part id — lets a delayed order search for a faster
+   * swap via /api/search. */
+  catalogPartId?: string;
 };
 
 export type PurchaseOrder = {
@@ -277,6 +304,13 @@ export type PurchaseOrder = {
   statusHistory: Array<{ status: OrderStatus; at: string; note?: string }>;
   /** Promised arrival (ISO date). Drives the delay alert. */
   etaDate: string;
+  /** Verified carrier events — the tracker's ONLY data source. */
+  carrierEvents: CarrierEvent[];
+  /** Milestone stages this order's source can report. The tracker
+   * renders exactly these — a 3-stage source renders 3 columns. */
+  supportedStages: TrackerStage[];
+  /** on_lift orders sort first and get the loudest delay treatment. */
+  urgency: OrderUrgency;
   lines: OrderLine[];
 };
 
@@ -292,3 +326,80 @@ export type MarketBaseline = {
   condition: string;
   capturedAt: string;
 };
+
+// ─── Claims (warranty / returns) ────────────────────────────────────
+
+/**
+ * Stable reason taxonomy. Each value maps to the model component its
+ * outcome records train:
+ *   doesnt_fit          → matcher / Part-Identity Graph corrections
+ *   failed_after_install → quality scores
+ *   arrived_damaged     → seller/carrier scores
+ *   no_longer_needed    → excluded from training
+ */
+export type ClaimReason =
+  | "doesnt_fit"
+  | "failed_after_install"
+  | "arrived_damaged"
+  | "no_longer_needed";
+
+export type ClaimTrainsComponent =
+  | "matcher"
+  | "quality"
+  | "seller_carrier"
+  | "excluded";
+
+export const CLAIM_TRAINING_MAP: Record<ClaimReason, ClaimTrainsComponent> = {
+  doesnt_fit: "matcher",
+  failed_after_install: "quality",
+  arrived_damaged: "seller_carrier",
+  no_longer_needed: "excluded",
+};
+
+export type ClaimResolution = "replacement" | "refund";
+
+export type ClaimStatus =
+  | "under_review"
+  | "approved"
+  | "replacement_shipped"
+  | "picked_up"
+  | "credited";
+
+/**
+ * The claim outcome record — optimizer-v4 training data. Rates must be
+ * computed against ALL delivered lines (orders without claims are the
+ * denominator), never from claims alone.
+ */
+export type ClaimRecord = {
+  id: string;
+  createdAt: string;
+  orderId: string;
+  lineId: string;
+  // Outcome-record payload
+  sku: string;
+  oeNumber: string;
+  /** SERVER-ONLY — never crosses to a client-facing surface. */
+  sellerId: string;
+  brand: string;
+  vehicle: Vehicle;
+  shopId: string;
+  reason: ClaimReason;
+  trainsComponent: ClaimTrainsComponent;
+  photoRef: string | null;
+  resolution: ClaimResolution;
+  orderedAt: string;
+  deliveredAt: string;
+  claimedAt: string;
+  timeToFailureDays: number;
+  mileageAtInstall: number | null;
+  // Lifecycle
+  status: ClaimStatus;
+  statusHistory: Array<{ status: ClaimStatus; at: string }>;
+  autoApproved: boolean;
+  creditMemoId: string | null;
+  /** SERVER-ONLY — RMA is created but never displayed. */
+  rmaId: string | null;
+};
+
+/** Client-safe claim — seller identity and RMA stripped. */
+export type PublicClaim = Omit<ClaimRecord, "sellerId" | "rmaId">;

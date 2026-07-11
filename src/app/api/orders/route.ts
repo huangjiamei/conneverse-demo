@@ -27,14 +27,17 @@ import type {
   GradeTier,
   MarketBaseline,
   OrderLine,
+  OrderUrgency,
   PublicOrder,
   PurchaseOrder,
   SavingsBaseline,
+  TrackerStage,
   Vehicle,
 } from "@/types/canonical";
 
 type InputLine = {
   offerId?: string;
+  catalogPartId?: string;
   partName?: string;
   partNumber?: string;
   brand?: string;
@@ -50,7 +53,17 @@ type Body = {
   quoteId?: string;
   shopId?: string;
   vehicle?: Vehicle;
+  urgency?: OrderUrgency;
   lines?: InputLine[];
+};
+
+/** Milestone stages a source can actually report. Marketplace carriers
+ * expose a coarser feed (3 stages); catalog/concierge channels report
+ * all 5. The tracker renders exactly this set — never interpolated. */
+const STAGES_BY_CHANNEL: Record<string, TrackerStage[]> = {
+  ebay: ["ordered", "in_transit", "delivered"],
+  simulated: ["ordered", "confirmed", "in_transit", "out_for_delivery", "delivered"],
+  local: ["ordered", "confirmed", "in_transit", "out_for_delivery", "delivered"],
 };
 
 function toPublicOrder(order: PurchaseOrder): PublicOrder {
@@ -129,18 +142,21 @@ export const POST = withApi(async (req) => {
   const nowIso = now.toISOString();
 
   // Group lines per seller via the projection-time offer index.
-  const groups = new Map<string, InputLine[]>();
+  const groups = new Map<string, { lines: InputLine[]; channel: string }>();
   for (const line of body.lines) {
     const seller = line.offerId ? store.lookupOffer(line.offerId) : null;
     const key = seller?.sellerId ?? "conneverse:unrouted";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(line);
+    if (!groups.has(key)) {
+      groups.set(key, { lines: [], channel: seller?.channel ?? "simulated" });
+    }
+    groups.get(key)!.lines.push(line);
   }
 
   const created: PublicOrder[] = [];
   let counter = 0;
-  for (const [sellerId, lines] of groups) {
+  for (const [sellerId, group] of groups) {
     counter++;
+    const { lines, channel } = group;
     const maxDays = Math.max(0, ...lines.map((l) => l.deliveryDays ?? 3));
     const eta = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
 
@@ -154,6 +170,7 @@ export const POST = withApi(async (req) => {
       qty: Math.max(1, l.qty ?? 1),
       unitPricePaid: l.unitPrice ?? 0,
       baseline: computeBaseline(l, nowIso),
+      catalogPartId: l.catalogPartId,
     }));
 
     const order = store.createOrder(
@@ -165,6 +182,10 @@ export const POST = withApi(async (req) => {
         status: "ordered",
         statusHistory: [{ status: "ordered", at: nowIso }],
         etaDate: eta.toISOString(),
+        carrierEvents: [{ stage: "ordered", at: nowIso }],
+        supportedStages:
+          STAGES_BY_CHANNEL[channel] ?? STAGES_BY_CHANNEL.simulated,
+        urgency: body.urgency ?? "scheduled",
         lines: orderLines,
       },
       nowIso

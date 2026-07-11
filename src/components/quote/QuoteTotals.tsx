@@ -20,6 +20,7 @@ export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
   const { profile } = useShop();
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  const [onLift, setOnLift] = useState(false);
   const {
     quoteItems,
     laborHours,
@@ -106,8 +107,10 @@ export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
         body: JSON.stringify({
           shopId: profile.shopName,
           vehicle: { year: year as number, make, model },
+          urgency: onLift ? "on_lift" : "scheduled",
           lines: quoteItems.map((qi) => ({
             offerId: qi.offerId,
+            catalogPartId: qi.catalogPartId,
             partName: qi.partName,
             partNumber: qi.partNumber,
             brand: qi.brand,
@@ -200,6 +203,18 @@ export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
         </div>
       </div>
 
+      {/* Urgency — on_lift orders sort first and get the loudest delay
+          treatment on the orders board. */}
+      <label className="mt-4 flex items-center gap-2 text-[12px] text-gray-600 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={onLift}
+          onChange={(e) => setOnLift(e.target.checked)}
+          className="accent-[#2EC4B6]"
+        />
+        Car is on the lift (rush)
+      </label>
+
       {/* Place order */}
       <button
         onClick={handlePlaceOrder}
@@ -219,7 +234,8 @@ export function QuoteTotals({ variant }: { variant: "sidebar" | "drawer" }) {
         </p>
       )}
 
-      {/* Generate PDF */}
+      {/* The Place Order button follows the urgency toggle above; PDF
+          quote remains for the customer-facing dual-option flow. */}
       <button
         onClick={handleGeneratePdf}
         className="mt-2 w-full h-11 rounded-lg bg-[#1B2838] text-white font-medium text-sm hover:bg-[#1B2838]/90 transition"

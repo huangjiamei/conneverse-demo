@@ -50,6 +50,8 @@ export type QuoteLine = {
   /** Opaque public offer id — the server maps it back to a seller
    * group when the order is placed. */
   offerId?: string;
+  /** Demo-catalog part id (enables delayed-order swap search). */
+  catalogPartId?: string;
   gradeTier?: import("./canonical").GradeTier;
   condition?: string;
   deliveryDays?: number;

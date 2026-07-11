@@ -517,6 +517,7 @@ export function SourcingProvider({
             category: part.category,
             // Order-placement context (opaque; feeds /api/orders).
             offerId: offering.id,
+            catalogPartId: part.id,
             gradeTier: offering.gradeTier,
             condition: offering.condition,
             deliveryDays: offering.deliveryEstimate.days,

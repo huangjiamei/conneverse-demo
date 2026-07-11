@@ -5,4 +5,8 @@ export const SHOP_CONFIG = {
   laborRate: 135,
   taxRate: 0.0875,
   zipCode: "94107",
+  /** Claims at or below this line total auto-approve instantly. */
+  autoApproveLimit: 200,
+  /** Return window shown on delivered lines ("day 7 of 30"). */
+  returnWindowDays: 30,
 };

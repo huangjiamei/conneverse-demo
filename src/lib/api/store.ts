@@ -11,6 +11,9 @@
 
 import { createHash } from "crypto";
 import type {
+  CarrierEvent,
+  ClaimRecord,
+  ClaimStatus,
   OrderStatus,
   PurchaseOrder,
   QuoteRecord,
@@ -156,6 +159,22 @@ export interface DataStore {
     now: string,
     note?: string
   ): PurchaseOrder | null;
+  /** Append a VERIFIED carrier event (the tracker's only data source)
+   * and sync the coarse order status. Same seam a carrier webhook
+   * calls. Null on unknown order. */
+  appendCarrierEvent(
+    orderId: string,
+    event: CarrierEvent
+  ): PurchaseOrder | null;
+
+  /** Claims — the warranty/returns outcome records. */
+  createClaim(claim: Omit<ClaimRecord, "id" | "createdAt">, now: string): ClaimRecord;
+  applyClaimStatus(
+    claimId: string,
+    status: ClaimStatus,
+    now: string
+  ): ClaimRecord | null;
+  listClaims(orderId?: string): ClaimRecord[];
 
   /** Opaque public offer id → server-side seller identity, written at
    * projection time so order placement can group lines per supplier
@@ -221,6 +240,7 @@ class InMemoryStore implements DataStore {
   private choices: ChoiceRecord[] = [];
   private offerIndex = new Map<string, { sellerId: string; channel: string }>();
   private shopHistory: ShopHistoryEntry[] = [];
+  private claims: ClaimRecord[] = [];
 
   createQuote(
     quote: Omit<QuoteRecord, "id" | "createdAt">,
@@ -270,6 +290,66 @@ class InMemoryStore implements DataStore {
     };
     this.orders.set(orderId, updated);
     return updated;
+  }
+
+  appendCarrierEvent(
+    orderId: string,
+    event: CarrierEvent
+  ): PurchaseOrder | null {
+    const order = this.orders.get(orderId);
+    if (!order) return null;
+    // Sync the coarse status from the carrier stage.
+    const statusFor: Record<CarrierEvent["stage"], OrderStatus> = {
+      ordered: "ordered",
+      confirmed: "ordered",
+      in_transit: "shipped",
+      out_for_delivery: "shipped",
+      delivered: "delivered",
+    };
+    const nextStatus = statusFor[event.stage];
+    const updated: PurchaseOrder = {
+      ...order,
+      carrierEvents: [...order.carrierEvents, event],
+      status: order.status === "exception" ? order.status : nextStatus,
+      statusHistory:
+        order.status !== nextStatus && order.status !== "exception"
+          ? [
+              ...order.statusHistory,
+              { status: nextStatus, at: event.at, note: event.note },
+            ]
+          : order.statusHistory,
+    };
+    this.orders.set(orderId, updated);
+    return updated;
+  }
+
+  createClaim(
+    claim: Omit<ClaimRecord, "id" | "createdAt">,
+    now: string
+  ): ClaimRecord {
+    const record: ClaimRecord = { ...claim, id: nextId("cl"), createdAt: now };
+    this.claims.push(record);
+    return record;
+  }
+  applyClaimStatus(
+    claimId: string,
+    status: ClaimStatus,
+    now: string
+  ): ClaimRecord | null {
+    const idx = this.claims.findIndex((c) => c.id === claimId);
+    if (idx < 0) return null;
+    const updated: ClaimRecord = {
+      ...this.claims[idx],
+      status,
+      statusHistory: [...this.claims[idx].statusHistory, { status, at: now }],
+    };
+    this.claims[idx] = updated;
+    return updated;
+  }
+  listClaims(orderId?: string): ClaimRecord[] {
+    return orderId
+      ? this.claims.filter((c) => c.orderId === orderId)
+      : [...this.claims];
   }
 
   registerOffer(opaqueId: string, sellerId: string, channel: string): void {
