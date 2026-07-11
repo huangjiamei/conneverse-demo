@@ -159,6 +159,8 @@ export function toPublicSearchResult(
     projected.debug = {
       guardrailRejections: result.meta.guardrailRejections,
       gateRejections: result.meta.rejections,
+      matchStrategy: result.meta.matchStrategy,
+      oeNumbers: result.meta.oeNumbers,
     };
   }
   return projected;

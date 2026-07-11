@@ -23,6 +23,8 @@ import type {
   SupplierConnector,
 } from "@/lib/connectors/SupplierConnector.ts";
 import { emptyGuardrailCounts } from "@/lib/guardrails.ts";
+import { store } from "@/lib/api/store.ts";
+import { oeConsensusKey } from "@/lib/oe-resolver.ts";
 import type { Vehicle } from "@/types/canonical";
 import type {
   AggregateResult,
@@ -76,10 +78,25 @@ export async function aggregateOfferings(
     model: vehicle.model,
   };
 
+  // Prefer OE hard-match when the consensus resolver has already cached
+  // real OE numbers for this part (populated by /api/resolve or a prior
+  // consensus run). Only use numbers with cross-seller agreement (≥2).
+  const cachedOe = store.getOeConsensus(
+    oeConsensusKey({
+      partId: part.id,
+      vehicle: normalizedVehicle,
+      partType: part.name,
+      position: null,
+    })
+  );
+  const oeNumbers =
+    cachedOe?.filter((c) => c.sellerCount >= 2).map((c) => c.oeNumber) ?? [];
+
   const diagnostics: ConnectorDiagnostics = { guardrailRejections: [] };
   const ctx: ConnectorContext = {
     buyerZip,
     limit: ebayLimit,
+    oeNumbers,
     diagnostics,
   };
 
@@ -151,6 +168,8 @@ export async function aggregateOfferings(
       totalAfterFilters: recommendations.length,
       rejections,
       guardrailRejections,
+      matchStrategy: diagnostics.matchStrategy ?? "keyword",
+      oeNumbers,
       durationMs: Date.now() - start,
     },
   };

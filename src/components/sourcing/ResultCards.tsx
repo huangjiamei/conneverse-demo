@@ -213,7 +213,25 @@ function DebugPanel({
         <span className="ml-auto text-gray-400">{open ? "−" : "+"}</span>
       </button>
       {open && (
-        <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+        <div className="px-3 pb-3">
+          <div className="flex items-center gap-2 pb-2 mb-2 border-b border-gray-200/70 text-[11px]">
+            <span className="text-gray-500">Match strategy:</span>
+            <span
+              className={`font-medium ${
+                debug.matchStrategy === "oe_hard" ? "text-teal" : "text-gray-600"
+              }`}
+            >
+              {debug.matchStrategy === "oe_hard"
+                ? "OE hard-match"
+                : "keyword"}
+            </span>
+            {debug.matchStrategy === "oe_hard" && debug.oeNumbers[0] && (
+              <span className="text-gray-400 tabular-nums">
+                · {debug.oeNumbers[0]}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
               Guardrails (pre-optimizer)
@@ -229,6 +247,7 @@ function DebugPanel({
             {gateRows.length > 0 ? gateRows : (
               <p className="text-[11px] text-gray-400">none</p>
             )}
+          </div>
           </div>
         </div>
       )}

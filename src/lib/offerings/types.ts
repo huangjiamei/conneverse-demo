@@ -131,6 +131,10 @@ export type AggregateResult = {
     rejections: Record<RejectionReason, number>;
     /** Guardrail rejections (pre-optimizer, marketplace-listing filters). */
     guardrailRejections: Record<GuardrailReason, number>;
+    /** How the marketplace connector matched: OE hard-match or keyword. */
+    matchStrategy: "oe_hard" | "keyword";
+    /** Consensus OE numbers used for the hard match, if any. */
+    oeNumbers: string[];
     /** Wall-clock duration of the aggregation. */
     durationMs: number;
   };

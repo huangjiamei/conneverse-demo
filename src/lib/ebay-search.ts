@@ -12,6 +12,7 @@ import { getEbayAccessToken } from "./ebay-auth.ts";
 
 const BROWSE_SEARCH_URL =
   "https://api.ebay.com/buy/browse/v1/item_summary/search";
+const BROWSE_ITEM_URL = "https://api.ebay.com/buy/browse/v1/item";
 
 // ─── Public types ───
 
@@ -266,4 +267,50 @@ export async function searchEbayParts(
 
   const data = (await res.json()) as EbaySearchResponse;
   return (data.itemSummaries ?? []).map(normalize);
+}
+
+// ─── Item aspects (for OE-number consensus) ─────────────────────────
+
+export type EbayAspect = { name: string; value: string };
+
+type EbayItemDetail = {
+  mpn?: string;
+  brand?: string;
+  localizedAspects?: Array<{ type?: string; name?: string; value?: string }>;
+};
+
+/**
+ * Fetch an item's detail and return its aspects (the OE/MPN/Interchange
+ * part-number fields live here, not in the search summary). `mpn` and
+ * `brand`, when present at the top level, are surfaced as synthetic
+ * aspects. One Browse getItem call per item — the caller bounds how many
+ * it fetches to respect rate limits.
+ */
+export async function getEbayItemAspects(
+  itemId: string,
+  marketplace = "EBAY_US"
+): Promise<EbayAspect[]> {
+  const token = await getEbayAccessToken();
+  const url = `${BROWSE_ITEM_URL}/${encodeURIComponent(itemId)}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-EBAY-C-MARKETPLACE-ID": marketplace,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(
+      `eBay getItem failed (${res.status} ${res.statusText})`
+    );
+  }
+  const data = (await res.json()) as EbayItemDetail;
+  const aspects: EbayAspect[] = [];
+  if (data.mpn) aspects.push({ name: "Manufacturer Part Number", value: data.mpn });
+  if (data.brand) aspects.push({ name: "Brand", value: data.brand });
+  for (const a of data.localizedAspects ?? []) {
+    if (a.name && a.value) aspects.push({ name: a.name, value: a.value });
+  }
+  return aspects;
 }

@@ -38,13 +38,35 @@ export class EbayConnector implements SupplierConnector {
     vehicle: Vehicle,
     ctx?: ConnectorContext
   ): Promise<Offering[]> {
+    const limit = ctx?.limit ?? 10;
+    const buyerZip = ctx?.buyerZip;
     let items;
+    let matchStrategy: "oe_hard" | "keyword" = "keyword";
     try {
-      items = await searchEbayParts(part.name, {
-        limit: ctx?.limit ?? 10,
-        vehicle,
-        buyerZip: ctx?.buyerZip,
-      });
+      // Staged matcher: an OE hard-match (consensus OE number, precise
+      // and vehicle-specific) is PREFERRED — its results lead the set —
+      // but we fill with keyword hits so coverage (and Option B) never
+      // collapses when the OE query is thin.
+      const oe = ctx?.oeNumbers?.[0];
+      const oeItems = oe
+        ? await searchEbayParts(oe, { limit, vehicle, buyerZip })
+        : [];
+
+      if (oeItems.length >= 2) {
+        matchStrategy = "oe_hard";
+        if (oeItems.length >= limit) {
+          items = oeItems;
+        } else {
+          const keyword = await searchEbayParts(part.name, { limit, vehicle, buyerZip });
+          const seen = new Set(oeItems.map((i) => i.itemId));
+          items = [
+            ...oeItems,
+            ...keyword.filter((i) => !seen.has(i.itemId)),
+          ].slice(0, limit);
+        }
+      } else {
+        items = await searchEbayParts(part.name, { limit, vehicle, buyerZip });
+      }
     } catch (err) {
       // Degrade gracefully — one channel failing must not sink the search.
       console.error(
@@ -53,6 +75,7 @@ export class EbayConnector implements SupplierConnector {
       );
       return [];
     }
+    if (ctx?.diagnostics) ctx.diagnostics.matchStrategy = matchStrategy;
 
     // Guardrails run BEFORE the optimizer sees anything.
     const { passed, rejected } = applyEbayGuardrails(items, {

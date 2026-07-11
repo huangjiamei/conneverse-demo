@@ -32,6 +32,9 @@ export type ConnectorContext = {
   buyerZip?: string;
   /** How many marketplace results to consider. */
   limit?: number;
+  /** Consensus OE / MPN numbers (from the OE resolver). When present, a
+   * marketplace connector prefers an OE hard-match over keyword search. */
+  oeNumbers?: string[];
   /** Optional per-request sink the connector fills with pre-optimizer
    * guardrail rejections. The aggregator creates one per request. */
   diagnostics?: ConnectorDiagnostics;
@@ -39,6 +42,8 @@ export type ConnectorContext = {
 
 export type ConnectorDiagnostics = {
   guardrailRejections: GuardrailRejection[];
+  /** How the marketplace connector matched: OE hard-match or keyword. */
+  matchStrategy?: "oe_hard" | "keyword";
 };
 
 export type ConnectorCapabilities = {

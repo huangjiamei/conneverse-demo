@@ -28,6 +28,23 @@ export type ResolutionLogEntry = {
   source: "deterministic" | "llm";
 };
 
+/**
+ * One consensus OE number resolved from marketplace listings. Structural
+ * shape (kept here to avoid a store↔oe-resolver import cycle).
+ */
+export type OeConsensusItem = {
+  oeNumber: string;
+  sellerCount: number;
+  confidence: number;
+};
+
+/** A persisted consensus result for one (platform, partType, position). */
+export type OeConsensusRecord = {
+  key: string;
+  createdAt: string;
+  results: OeConsensusItem[];
+};
+
 export interface DataStore {
   createQuote(quote: Omit<QuoteRecord, "id" | "createdAt">, now: string): QuoteRecord;
   getQuote(id: string): QuoteRecord | null;
@@ -42,6 +59,11 @@ export interface DataStore {
     now: string
   ): ResolutionLogEntry;
   listResolutions(): ResolutionLogEntry[];
+
+  /** Consensus OE table — compounds with usage. Null on cache miss. */
+  getOeConsensus(key: string): OeConsensusItem[] | null;
+  saveOeConsensus(key: string, results: OeConsensusItem[], now: string): void;
+  listOeConsensus(): OeConsensusRecord[];
 }
 
 let counter = 0;
@@ -58,6 +80,7 @@ class InMemoryStore implements DataStore {
   private quotes = new Map<string, QuoteRecord>();
   private orders = new Map<string, PurchaseOrder>();
   private resolutions: ResolutionLogEntry[] = [];
+  private oeConsensus = new Map<string, OeConsensusRecord>();
 
   createQuote(
     quote: Omit<QuoteRecord, "id" | "createdAt">,
@@ -107,6 +130,20 @@ class InMemoryStore implements DataStore {
   }
   listResolutions(): ResolutionLogEntry[] {
     return [...this.resolutions];
+  }
+
+  getOeConsensus(key: string): OeConsensusItem[] | null {
+    return this.oeConsensus.get(key)?.results ?? null;
+  }
+  saveOeConsensus(
+    key: string,
+    results: OeConsensusItem[],
+    now: string
+  ): void {
+    this.oeConsensus.set(key, { key, createdAt: now, results });
+  }
+  listOeConsensus(): OeConsensusRecord[] {
+    return [...this.oeConsensus.values()];
   }
 }
 

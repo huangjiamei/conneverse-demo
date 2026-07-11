@@ -161,6 +161,8 @@ export type PublicSearchResult = {
   debug?: {
     guardrailRejections: Record<string, number>;
     gateRejections: Record<string, number>;
+    matchStrategy: "oe_hard" | "keyword";
+    oeNumbers: string[];
   };
 };
 
