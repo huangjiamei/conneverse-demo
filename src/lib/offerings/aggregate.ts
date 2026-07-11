@@ -13,7 +13,15 @@
  */
 
 import type { Part } from "@/data/parts-catalog";
-import { applyGates, optimize } from "@/lib/optimizer";
+import {
+  applyGates,
+  deriveCriticality,
+  deriveVehicleClass,
+  deriveWeights,
+  optimize,
+  resolveDemandContext,
+  type DemandContext,
+} from "@/lib/optimizer";
 import { EbayConnector } from "@/lib/connectors/ebay.ts";
 import { SimulatedConnector } from "@/lib/connectors/simulated.ts";
 import { ConciergeConnector } from "@/lib/connectors/concierge.ts";
@@ -54,6 +62,10 @@ export type AggregateInput = {
   buyerZip?: string;
   /** How many marketplace results to consider per connector. Default 10. */
   ebayLimit?: number;
+  /** Demand context overrides (urgency toggle, tier preference,
+   * preferred brands, account policy, learned price sensitivity).
+   * Everything unspecified is derived or defaulted. */
+  demand?: Partial<DemandContext>;
 };
 
 /**
@@ -61,6 +73,35 @@ export type AggregateInput = {
  * Connectors that fail return `[]` (they swallow their own errors) — we
  * never fail the whole request because one source had a hiccup.
  */
+/** Human assumption line for the results footer. */
+function buildAssumption(
+  ctx: DemandContext,
+  vehicle: { year: number | string; make: string; model: string },
+  partName: string
+): string {
+  const urgencyPhrase =
+    ctx.urgency === "on_lift"
+      ? "Prioritizing speed"
+      : ctx.urgency === "scheduled_week"
+      ? "Prioritizing price"
+      : "Balancing price and delivery";
+  const qualityPhrase =
+    ctx.partCriticality === "safety"
+      ? " and proven quality"
+      : ctx.vehicleClass === "luxury"
+      ? " and OEM quality"
+      : "";
+  const situation =
+    ctx.urgency === "on_lift"
+      ? "car on lift"
+      : ctx.urgency === "scheduled_week"
+      ? "scheduled this week"
+      : "scheduled job";
+  const critical =
+    ctx.partCriticality === "safety" ? " (safety-critical)" : "";
+  return `${urgencyPhrase}${qualityPhrase} — ${situation}, ${vehicle.year} ${vehicle.make} ${vehicle.model}, ${partName.toLowerCase()}${critical}`;
+}
+
 export async function aggregateOfferings(
   input: AggregateInput
 ): Promise<AggregateResult> {
@@ -126,14 +167,22 @@ export async function aggregateOfferings(
     }
   });
 
-  // ─── Gate + score + pick (the optimizer) ───
-  const demandContext = {
-    urgency: "scheduled" as const,
+  // ─── Gate + score + pick (the optimizer v3) ───
+  // Population rules: vehicleClass from the vehicle, partCriticality
+  // from the taxonomy category; caller overrides (urgency toggle, tier
+  // preference, policy, learned price sensitivity) ride on input.demand.
+  const demandContext = resolveDemandContext({
     qualityFloor: RELIABILITY_FLOOR,
-  };
+    vehicleClass: deriveVehicleClass(vehicle.make),
+    partCriticality: deriveCriticality(part.category),
+    category: part.category,
+    vehicleMake: vehicle.make,
+    ...input.demand,
+  });
   const recommendations = optimize(all, demandContext);
-  const gateLog =
-    recommendations[0]?.gateLog ?? applyGates(all, demandContext).gateLog;
+  const gated = applyGates(all, demandContext);
+  const gateLog = recommendations[0]?.gateLog ?? gated.gateLog;
+  const weights = deriveWeights(demandContext, gated.survivors);
 
   const rejections: Record<RejectionReason, number> = {
     out_of_stock: 0,
@@ -142,6 +191,7 @@ export async function aggregateOfferings(
     quality_too_low: 0,
     missing_price: 0,
     missing_delivery: 0,
+    policy_blocked: 0,
   };
   for (const entry of gateLog) rejections[entry.gate]++;
 
@@ -176,6 +226,19 @@ export async function aggregateOfferings(
       guardrailRejections,
       matchStrategy: diagnostics.matchStrategy ?? "keyword",
       oeNumbers,
+      weights,
+      policyHits: gated.policyHits,
+      scores: recommendations.map((r) => ({
+        offeringId: r.offering.id,
+        brand: r.offering.brand,
+        score: Math.round(r.score * 1000) / 1000,
+        price: Math.round(r.breakdown.price * 1000) / 1000,
+        reliability: Math.round(r.breakdown.reliability * 1000) / 1000,
+        delivery: Math.round(r.breakdown.delivery * 1000) / 1000,
+        fitment: Math.round(r.breakdown.fitment * 1000) / 1000,
+        bonus: Math.round(r.breakdown.bonus * 1000) / 1000,
+      })),
+      assumption: buildAssumption(demandContext, vehicle, part.name),
       durationMs: Date.now() - start,
     },
   };

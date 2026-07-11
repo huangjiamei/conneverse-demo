@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ImageOff,
   RefreshCcw,
+  ShieldAlert,
   Sprout,
   XCircle,
 } from "lucide-react";
@@ -26,6 +27,146 @@ import Link from "next/link";
 import { useShop } from "@/context/ShopContext";
 import type { PhotoCurationEntry } from "@/lib/api/store";
 import type { GraduationGroup } from "@/app/api/graduation/route";
+import type { AccountPolicy } from "@/lib/optimizer";
+import type { GradeTier } from "@/types/canonical";
+
+const POLICY_CATEGORIES = ["Brakes", "Suspension", "Engine", "Electrical"];
+const TIER_FLOOR_OPTIONS: Array<{ value: GradeTier | ""; label: string }> = [
+  { value: "", label: "No floor" },
+  { value: "value_aftermarket", label: "Value aftermarket +" },
+  { value: "premium_aftermarket", label: "Premium aftermarket +" },
+  { value: "oem_genuine", label: "OEM Genuine only" },
+];
+
+/**
+ * Chain account policy — set here, enforced silently by the optimizer
+ * as hard gates. Advisors never see a policy control; blocked
+ * candidates show up only in the dev debug panel as policy hits.
+ */
+function PolicySection({ shopId }: { shopId: string }) {
+  const [floors, setFloors] = useState<Record<string, GradeTier | "">>({});
+  const [priceCap, setPriceCap] = useState<string>("");
+  const [saved, setSaved] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/policy?shopId=${encodeURIComponent(shopId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const p = (data.policy ?? null) as AccountPolicy | null;
+        if (p?.tierFloorByCategory) {
+          setFloors(p.tierFloorByCategory as Record<string, GradeTier | "">);
+        }
+        if (p?.priceCapPerLine != null) setPriceCap(String(p.priceCapPerLine));
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [shopId]);
+
+  async function save(clear = false) {
+    const tierFloorByCategory = Object.fromEntries(
+      Object.entries(floors).filter(([, v]) => v !== "")
+    ) as Record<string, GradeTier>;
+    const cap = parseFloat(priceCap);
+    const policy: AccountPolicy | null = clear
+      ? null
+      : {
+          ...(Object.keys(tierFloorByCategory).length > 0
+            ? { tierFloorByCategory }
+            : {}),
+          ...(Number.isFinite(cap) && cap > 0 ? { priceCapPerLine: cap } : {}),
+        };
+    await fetch("/api/policy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shopId, policy }),
+    });
+    if (clear) {
+      setFloors({});
+      setPriceCap("");
+    }
+    setSaved(clear ? "Policy cleared." : "Policy saved — applies to the next search.");
+    setTimeout(() => setSaved(null), 3500);
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="flex items-center gap-2">
+        <ShieldAlert size={16} className="text-amber" />
+        <h2 className="text-base font-bold text-dark">
+          Account policy — {shopId}
+        </h2>
+      </div>
+      <p className="text-[12px] text-gray-500 mt-0.5 mb-4">
+        Chain-level constraints, enforced silently as optimizer hard gates.
+        Advisors never see these — blocked candidates appear only as
+        &ldquo;account policy blocked&rdquo; in the dev debug panel.
+      </p>
+
+      {!loaded ? (
+        <p className="text-sm text-gray-400 py-2">Loading…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {POLICY_CATEGORIES.map((cat) => (
+              <label key={cat} className="block">
+                <span className="text-[11px] uppercase tracking-wide text-gray-400">
+                  {cat} tier floor
+                </span>
+                <select
+                  value={floors[cat] ?? ""}
+                  onChange={(e) =>
+                    setFloors((f) => ({
+                      ...f,
+                      [cat]: e.target.value as GradeTier | "",
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
+                >
+                  {TIER_FLOOR_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wide text-gray-400">
+                Price cap per line ($)
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={priceCap}
+                onChange={(e) => setPriceCap(e.target.value)}
+                placeholder="No cap"
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              onClick={() => save(false)}
+              className="px-4 py-2 rounded-lg bg-[#1B2838] text-white text-xs font-medium hover:bg-[#1B2838]/90 transition"
+            >
+              Save policy
+            </button>
+            <button
+              onClick={() => save(true)}
+              className="px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition"
+            >
+              Clear policy
+            </button>
+            {saved && <span className="text-[12px] text-teal">{saved}</span>}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
 
 export default function OpsPage() {
   const { profile, getSourcingMode, setSourcingMode } = useShop();
@@ -306,6 +447,9 @@ export default function OpsPage() {
             grid stays one click away.
           </p>
         </section>
+
+        {/* ─── Account policy (optimizer hard gates) ─── */}
+        <PolicySection shopId={profile?.shopName ?? "Bay Auto Care"} />
       </main>
     </div>
   );

@@ -60,6 +60,8 @@ export const POST = withApi(async (req) => {
         pickedRole: agreement ? (i % 3 === 0 ? "B" : "A") : "candidate",
         recommendedOfferId: "po_seed_reco",
         agreement,
+        deltaPrice: agreement ? null : (i % 2 === 0 ? -8.5 : 6.25),
+        deltaDelivery: agreement ? null : (i % 2 === 0 ? 2 : -1),
         choiceReason: agreement ? null : REASONS[i % REASONS.length],
         freeText: null,
         whyNot: [],

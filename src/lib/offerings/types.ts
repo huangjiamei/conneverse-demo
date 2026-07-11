@@ -104,7 +104,8 @@ export type RejectionReason =
   | "below_reliability_floor"
   | "quality_too_low"
   | "missing_price"
-  | "missing_delivery";
+  | "missing_delivery"
+  | "policy_blocked";
 
 /**
  * Reasons a raw marketplace candidate is rejected by the guardrails —
@@ -140,6 +141,23 @@ export type AggregateResult = {
     matchStrategy: "oe_hard" | "keyword";
     /** Consensus OE numbers used for the hard match, if any. */
     oeNumbers: string[];
+    /** Context-derived weights this search ranked with (debug). */
+    weights: { price: number; reliability: number; delivery: number; fitment: number };
+    /** Account-policy knockouts (debug). */
+    policyHits: number;
+    /** Per-candidate score decomposition (debug, dev-only surface). */
+    scores: Array<{
+      offeringId: string;
+      brand: string | null;
+      score: number;
+      price: number;
+      reliability: number;
+      delivery: number;
+      fitment: number;
+      bonus: number;
+    }>;
+    /** The human assumption line ("Prioritizing speed — car on lift…"). */
+    assumption: string;
     /** Wall-clock duration of the aggregation. */
     durationMs: number;
   };

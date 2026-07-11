@@ -30,10 +30,7 @@ export const POST = withApi(async (req) => {
     );
   }
 
-  const context: DemandContext = {
-    urgency: body.demandContext?.urgency ?? "scheduled",
-    qualityFloor: body.demandContext?.qualityFloor ?? 0.65,
-  };
+  const context: Partial<DemandContext> = body.demandContext ?? {};
 
   const recommendations = optimize(body.candidates, context);
   const picks = recommendations

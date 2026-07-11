@@ -42,6 +42,11 @@ import type { PartRequest, QuoteLine, Vehicle } from "@/types";
 
 export type VehicleEntryMode = "ymm" | "vin";
 
+/** The ONLY per-search user input (one toggle). Everything else in the
+ * demand context is derived server-side. The correction sheet can also
+ * pick scheduled_week. */
+export type SearchUrgency = "on_lift" | "scheduled_48h" | "scheduled_week";
+
 export const SEARCH_STEPS = [
   "Searching local distributors...",
   "Searching live marketplace (eBay)...",
@@ -126,6 +131,12 @@ type SourcingContextValue = {
   searchProgress: number;
   resultsVisible: boolean;
 
+  // Demand context (per-search)
+  urgency: SearchUrgency;
+  setUrgency: (urgency: SearchUrgency) => void;
+  tierPreference: string | null;
+  setTierPreference: (tier: string | null) => void;
+
   // Aggregator (client-facing public projection)
   aggregate: PublicSearchResult | null;
   aggregating: boolean;
@@ -200,6 +211,10 @@ export function SourcingProvider({
   const [searchStep, setSearchStep] = useState(0);
   const [searchProgress, setSearchProgress] = useState(0);
   const [resultsVisible, setResultsVisible] = useState(false);
+
+  // Demand context — urgency is the one per-search user input.
+  const [urgency, setUrgency] = useState<SearchUrgency>("scheduled_48h");
+  const [tierPreference, setTierPreference] = useState<string | null>(null);
 
   // Aggregator results (Option A + Option B + funnel metadata)
   const [aggregate, setAggregate] = useState<PublicSearchResult | null>(null);
@@ -348,6 +363,9 @@ export function SourcingProvider({
       setSearchQuery(name);
       setActiveCategory(category);
       setSelectedPartId(partId);
+      // Tier preference is this-search-only (the correction sheet says
+      // so) — a new part selection starts a fresh search context.
+      setTierPreference(null);
 
       let step = 0;
       const interval = setInterval(() => {
@@ -389,6 +407,9 @@ export function SourcingProvider({
         vehicle: { year, make, model },
         partRequest: { partId: selectedPartId },
         zip: profile?.zipCode,
+        urgency,
+        tierPreference: tierPreference ?? undefined,
+        shopId: profile?.shopName,
       }),
       signal: controller.signal,
     })
@@ -414,7 +435,16 @@ export function SourcingProvider({
       });
 
     return () => controller.abort();
-  }, [selectedPartId, make, model, year, profile?.zipCode]);
+  }, [
+    selectedPartId,
+    make,
+    model,
+    year,
+    profile?.zipCode,
+    profile?.shopName,
+    urgency,
+    tierPreference,
+  ]);
 
   // ─── Derived: vehicle + catalog ───
 
@@ -609,6 +639,11 @@ export function SourcingProvider({
     searchStep,
     searchProgress,
     resultsVisible,
+
+    urgency,
+    setUrgency,
+    tierPreference,
+    setTierPreference,
 
     aggregate,
     aggregating,

@@ -33,6 +33,8 @@ export const POST = withApi(async (req) => {
       pickedRole: body.pickedRole ?? "candidate",
       recommendedOfferId: body.recommendedOfferId ?? null,
       agreement: body.agreement ?? body.pickedRole !== "candidate",
+      deltaPrice: body.deltaPrice ?? null,
+      deltaDelivery: body.deltaDelivery ?? null,
       choiceReason: body.choiceReason ?? null,
       freeText: body.freeText ?? null,
       whyNot: body.whyNot ?? [],

@@ -123,6 +123,10 @@ export type PublicOffer = {
   /** "A"/"B" are the machine picks; "candidate" is a ranked survivor
    * shown in the copilot comparison grid. */
   role: "A" | "B" | "candidate";
+  /** Card label for a pick — data-driven since v3 (the primary pick is
+   * "Ready Now" only when it's actually fast; a slow-cheap primary
+   * under scheduled_week reads "Best Price"). */
+  pickLabel: "Ready Now" | "Best Price" | null;
   partName: string;
   partNumber: string;
   brand: string | null;
@@ -182,17 +186,39 @@ export type PublicSearchResult = {
     belowBar: number;
     sourcesSearched: number;
     durationMs: number;
+    /** The quiet, tappable assumption line under the results
+     * ("Prioritizing speed and OEM quality — car on lift, 2022 Camry,
+     * brake part"). */
+    assumption: string;
   };
   /**
-   * Dev-only diagnostics — rejection counts (no seller identity). Present
-   * only when the server runs outside production; the client renders it
-   * as a debug panel. Omitted entirely in production.
+   * Dev-only diagnostics — rejection counts, weights, and score
+   * decompositions (no seller identity). Present only when the server
+   * runs outside production; the client renders it as a debug panel.
+   * Omitted entirely in production.
    */
   debug?: {
     guardrailRejections: Record<string, number>;
     gateRejections: Record<string, number>;
     matchStrategy: "oe_hard" | "keyword";
     oeNumbers: string[];
+    weights: {
+      price: number;
+      reliability: number;
+      delivery: number;
+      fitment: number;
+    };
+    policyHits: number;
+    scores: Array<{
+      offeringId: string;
+      brand: string | null;
+      score: number;
+      price: number;
+      reliability: number;
+      delivery: number;
+      fitment: number;
+      bonus: number;
+    }>;
   };
 };
 

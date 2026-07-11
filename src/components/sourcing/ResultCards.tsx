@@ -19,8 +19,9 @@
  * badges (no numeric scores), curated photos only.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowUpDown,
   Bug,
   Check,
   ChevronDown,
@@ -30,8 +31,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useShop } from "@/context/ShopContext";
-import { useSourcing } from "@/context/SourcingContext";
+import { useSourcing, type SearchUrgency } from "@/context/SourcingContext";
 import { formatPrice } from "@/lib/format";
+import { TIER_RANK } from "@/lib/grade-tier";
 import type { PublicOffer } from "@/types/canonical";
 import type { Part } from "@/types";
 import { GuaranteeBadges } from "./GuaranteeBadges";
@@ -306,18 +308,57 @@ function CandidateSheet({
 
 // ─── Candidate grid (copilot default view) ──────────────────────────
 
-function PickTag({ role }: { role: "A" | "B" }) {
+function PickTag({ offer }: { offer: PublicOffer }) {
+  // Data-driven since v3: the label reflects what the pick actually is
+  // (a slow-cheap primary under scheduled_week reads "Best Price"; a
+  // next-best alternative with no speed/price edge reads neutral).
+  const label = offer.pickLabel ?? "Also qualified";
+  const style =
+    label === "Ready Now"
+      ? "bg-teal/10 text-teal"
+      : label === "Best Price"
+      ? "bg-amber/10 text-amber"
+      : "bg-gray-100 text-gray-500";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-        role === "A" ? "bg-teal/10 text-teal" : "bg-amber/10 text-amber"
-      }`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style}`}
     >
       <Sparkles size={10} />
-      Our pick — {role === "A" ? "Ready Now" : "Best Price"}
+      Our pick — {label}
     </span>
   );
 }
+
+// ─── Sortable grid state ────────────────────────────────────────────
+
+type SortKey = "brand" | "tier" | "warranty" | "delivery" | "price";
+type SortState = { key: SortKey; dir: 1 | -1 } | null;
+
+const SORT_ACCESSORS: Record<SortKey, (o: PublicOffer) => string | number> = {
+  brand: (o) => (o.brand ?? "").toLowerCase(),
+  tier: (o) => -TIER_RANK[o.gradeTier], // best grade first on first click
+  warranty: (o) => o.warranty.toLowerCase(),
+  delivery: (o) => o.deliveryEstimate.days,
+  price: (o) => o.price,
+};
+
+function sortCandidates(
+  candidates: PublicOffer[],
+  sort: SortState
+): PublicOffer[] {
+  if (!sort) return candidates; // ranked order (picks pinned) by default
+  const get = SORT_ACCESSORS[sort.key];
+  return [...candidates].sort((a, b) => {
+    const av = get(a);
+    const bv = get(b);
+    if (av < bv) return -sort.dir;
+    if (av > bv) return sort.dir;
+    return 0;
+  });
+}
+
+/** Grid shows 7 rows by default; the rest sit behind an expander. */
+const GRID_VISIBLE = 7;
 
 function CandidateGrid({
   candidates,
@@ -334,25 +375,62 @@ function CandidateGrid({
   onSelect: (offer: PublicOffer) => void;
   onPhotoOpen: () => void;
 }) {
+  const [sort, setSort] = useState<SortState>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const sorted = useMemo(
+    () => sortCandidates(candidates, sort),
+    [candidates, sort]
+  );
+  const visible = showAll ? sorted : sorted.slice(0, GRID_VISIBLE);
+  const hidden = sorted.length - visible.length;
+
+  const toggleSort = (key: SortKey) =>
+    setSort((s) =>
+      s?.key === key
+        ? s.dir === 1
+          ? { key, dir: -1 }
+          : null // third click returns to ranked order
+        : { key, dir: 1 }
+    );
+
+  const header = (label: string, key: SortKey, right?: boolean) => (
+    <button
+      onClick={() => toggleSort(key)}
+      className={`inline-flex items-center gap-1 uppercase tracking-wide hover:text-gray-600 transition ${
+        right ? "justify-end" : ""
+      } ${sort?.key === key ? "text-gray-700 font-semibold" : ""}`}
+    >
+      {label}
+      <ArrowUpDown
+        size={9}
+        className={sort?.key === key ? "opacity-100" : "opacity-40"}
+      />
+      {sort?.key === key && (
+        <span className="text-[9px]">{sort.dir === 1 ? "↑" : "↓"}</span>
+      )}
+    </button>
+  );
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden divide-y divide-gray-100">
-      {/* Header */}
+      {/* Header — sortable columns */}
       <div className="hidden md:grid grid-cols-[1fr_150px_120px_150px_90px_88px_32px] gap-2 px-4 py-2 bg-gray-50 text-[10px] uppercase tracking-wide text-gray-400">
-        <span>Part / Brand</span>
-        <span>Grade tier</span>
-        <span>Warranty</span>
-        <span>Delivery</span>
-        <span className="text-right">Price</span>
+        {header("Part / Brand", "brand")}
+        {header("Grade tier", "tier")}
+        {header("Warranty", "warranty")}
+        {header("Delivery", "delivery")}
+        <span className="text-right">{header("Price", "price", true)}</span>
         <span />
         <span />
       </div>
 
-      {candidates.map((o) => (
+      {visible.map((o) => (
         <div key={o.id}>
           <div className="px-4 py-3">
             {(o.role === "A" || o.role === "B") && (
               <div className="mb-1.5">
-                <PickTag role={o.role} />
+                <PickTag offer={o} />
               </div>
             )}
             <div className="grid grid-cols-2 md:grid-cols-[1fr_150px_120px_150px_90px_88px_32px] gap-2 items-center">
@@ -403,6 +481,138 @@ function CandidateGrid({
           )}
         </div>
       ))}
+
+      {hidden > 0 && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="w-full py-2.5 text-xs font-medium text-teal hover:bg-teal/5 transition"
+        >
+          Show {hidden} more qualified match{hidden === 1 ? "" : "es"}
+        </button>
+      )}
+      {showAll && sorted.length > GRID_VISIBLE && (
+        <button
+          onClick={() => setShowAll(false)}
+          className="w-full py-2.5 text-xs font-medium text-gray-400 hover:bg-gray-50 transition"
+        >
+          Show fewer
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Assumption line + correction sheet ─────────────────────────────
+
+const URGENCY_OPTIONS: Array<{ value: SearchUrgency; label: string }> = [
+  { value: "on_lift", label: "Car on lift" },
+  { value: "scheduled_48h", label: "Scheduled (48h)" },
+  { value: "scheduled_week", label: "Scheduled (this week)" },
+];
+
+const TIER_OPTIONS: Array<{ value: string | null; label: string }> = [
+  { value: null, label: "No preference" },
+  { value: "oem_genuine", label: "OEM Genuine" },
+  { value: "premium_aftermarket", label: "Premium aftermarket" },
+  { value: "value_aftermarket", label: "Value aftermarket" },
+];
+
+/**
+ * The quiet, tappable assumption line — "context, not knobs." One line
+ * states what the optimizer assumed; tapping it opens a minimal
+ * correction sheet (urgency + tier preference, this search only). Every
+ * correction logs a preference label — the correction-sheet training
+ * stream.
+ */
+function AssumptionLine({
+  assumption,
+  category,
+}: {
+  assumption: string;
+  category: string;
+}) {
+  const { urgency, setUrgency, tierPreference, setTierPreference } =
+    useSourcing();
+  const { profile } = useShop();
+  const [open, setOpen] = useState(false);
+
+  const logPreference = (field: "urgency" | "tierPreference", value: string) => {
+    fetch("/api/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shopId: profile?.shopName ?? "unknown-shop",
+        category,
+        field,
+        value,
+      }),
+    }).catch(() => {
+      // Label logging never blocks the flow.
+    });
+  };
+
+  return (
+    <div className="mb-4 -mt-2">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-[11px] text-gray-400 hover:text-gray-600 transition text-left"
+      >
+        {assumption} <span className="underline">Not right? Adjust</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3 space-y-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1.5">
+              When is the job?
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {URGENCY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setUrgency(opt.value);
+                    logPreference("urgency", opt.value);
+                  }}
+                  className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                    urgency === opt.value
+                      ? "bg-[#1B2838] text-white"
+                      : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1.5">
+              Quality preference (this search)
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {TIER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => {
+                    setTierPreference(opt.value);
+                    if (opt.value) logPreference("tierPreference", opt.value);
+                  }}
+                  className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                    tierPreference === opt.value
+                      ? "bg-[#1B2838] text-white"
+                      : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400">
+            Applies to this search — results re-rank instantly.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -427,18 +637,23 @@ function OfferingCard({
   onAdd: () => void;
 }) {
   const isA = variant === "A";
+  // v3: the label is data-driven — teal = Ready Now, amber = Best Price
+  // regardless of which card slot the pick occupies. A next-best
+  // alternative with no speed/price edge reads neutral.
+  const label = offering.pickLabel ?? "Also qualified";
+  const ready = label === "Ready Now";
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-150">
-      <div className={isA ? "h-[3px] bg-teal" : "h-[3px] bg-amber"} />
+      <div className={ready ? "h-[3px] bg-teal" : "h-[3px] bg-amber"} />
       <div className="p-5">
         <div className="flex items-center justify-between mb-1">
           <span
             className={`text-[11px] font-bold uppercase tracking-wider ${
-              isA ? "text-teal" : "text-amber"
+              ready ? "text-teal" : "text-amber"
             }`}
           >
-            {isA ? "Ready Now" : "Best Price"}
+            {label}
           </span>
           {!isA && savings > 0 && (
             <span className="text-[11px] font-semibold text-green-600 bg-green-50 rounded-full px-2 py-0.5">
@@ -463,7 +678,7 @@ function OfferingCard({
             target="_blank"
             rel="noopener noreferrer"
             className={`mt-1.5 text-[11px] hover:underline ${
-              isA ? "text-teal" : "text-amber"
+              ready ? "text-teal" : "text-amber"
             }`}
           >
             &#9654; Watch product video
@@ -514,7 +729,7 @@ function OfferingCard({
         <button
           onClick={onAdd}
           className={`mt-4 w-full h-11 rounded-lg ${
-            isA ? "bg-teal hover:bg-teal/90" : "bg-amber hover:bg-amber/90"
+            ready ? "bg-teal hover:bg-teal/90" : "bg-amber hover:bg-amber/90"
           } text-white font-medium text-sm active:scale-[0.98] transition-all duration-150 ${
             pulsing ? "animate-pulse" : ""
           }`}
@@ -616,8 +831,82 @@ function DebugPanel({
               ) : (
                 <p className="text-[11px] text-gray-400">none</p>
               )}
+              {debug.policyHits > 0 && (
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-gray-500">Account policy blocked</span>
+                  <span className="tabular-nums text-gray-700">
+                    {debug.policyHits}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* v3: context-derived weights (server-side only — never a UI knob) */}
+          <div className="mt-3 pt-2 border-t border-gray-200/70">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+              Derived weights (context → optimizer)
+            </p>
+            <div className="flex gap-4 text-[11px] tabular-nums">
+              {(
+                [
+                  ["price", debug.weights.price],
+                  ["reliability", debug.weights.reliability],
+                  ["delivery", debug.weights.delivery],
+                  ["fitment", debug.weights.fitment],
+                ] as const
+              ).map(([k, v]) => (
+                <span key={k} className="text-gray-600">
+                  <span className="text-gray-400">{k}</span> {v.toFixed(2)}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* v3: score decomposition for the ranked survivors */}
+          {debug.scores.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-gray-200/70 overflow-x-auto">
+              <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+                Score decomposition (weighted components)
+              </p>
+              <table className="w-full text-[10px] tabular-nums">
+                <thead>
+                  <tr className="text-gray-400 text-left">
+                    <th className="pr-2 font-normal">brand</th>
+                    <th className="pr-2 font-normal text-right">price</th>
+                    <th className="pr-2 font-normal text-right">reliab.</th>
+                    <th className="pr-2 font-normal text-right">deliv.</th>
+                    <th className="pr-2 font-normal text-right">fitment</th>
+                    <th className="pr-2 font-normal text-right">bonus</th>
+                    <th className="font-normal text-right">total</th>
+                  </tr>
+                </thead>
+                <tbody className="text-gray-600">
+                  {debug.scores.slice(0, 8).map((s) => (
+                    <tr key={s.offeringId}>
+                      <td className="pr-2 truncate max-w-[120px]">
+                        {s.brand ?? "—"}
+                      </td>
+                      <td className="pr-2 text-right">{s.price.toFixed(3)}</td>
+                      <td className="pr-2 text-right">
+                        {s.reliability.toFixed(3)}
+                      </td>
+                      <td className="pr-2 text-right">
+                        {s.delivery.toFixed(3)}
+                      </td>
+                      <td className="pr-2 text-right">
+                        {s.fitment.toFixed(3)}
+                      </td>
+                      <td className="pr-2 text-right">{s.bonus.toFixed(3)}</td>
+                      <td className="text-right font-medium text-gray-700">
+                        {s.score.toFixed(3)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -680,6 +969,9 @@ export function ResultCards() {
       }
     ) => {
       if (!selectedPart) return;
+      // Structured deltas: picked − recommended (A). What did the human
+      // trade when they overrode? Feeds priceSensitivity learning.
+      const disagreed = optionA && picked.id !== optionA.id;
       fetch("/api/choices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -691,6 +983,12 @@ export function ResultCards() {
           pickedRole: picked.role,
           recommendedOfferId: optionA?.id ?? null,
           agreement: picked.role !== "candidate",
+          deltaPrice: disagreed
+            ? Math.round((picked.price - optionA.price) * 100) / 100
+            : null,
+          deltaDelivery: disagreed
+            ? picked.deliveryEstimate.days - optionA.deliveryEstimate.days
+            : null,
           choiceReason: labels.choiceReason,
           freeText: labels.freeText,
           whyNot: labels.whyNot,
@@ -702,7 +1000,7 @@ export function ResultCards() {
         // Label logging must never block the sourcing flow.
       });
     },
-    [selectedPart, profile?.shopName, optionA?.id]
+    [selectedPart, profile?.shopName, optionA]
   );
 
   const busy = isSearching || aggregating;
@@ -814,6 +1112,14 @@ export function ResultCards() {
           </div>
         </div>
       </div>
+
+      {/* v3 assumption line — quiet, tappable, corrections re-rank */}
+      {aggregate.meta.assumption && (
+        <AssumptionLine
+          assumption={aggregate.meta.assumption}
+          category={selectedPart.category}
+        />
+      )}
 
       {hasResults ? (
         <>

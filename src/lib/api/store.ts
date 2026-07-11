@@ -131,6 +131,10 @@ export type ChoiceRecord = {
   /** True when the advisor took a machine pick (A or B) — the
    * agreement metric that drives graduation. An override is !agreement. */
   agreement: boolean;
+  /** Override deltas vs. the recommendation — preference training data
+   * for shop-taste learning (picked − recommended). */
+  deltaPrice: number | null;
+  deltaDelivery: number | null;
   /** One-tap reason chip ("better brand", "faster", …), optional. */
   choiceReason: string | null;
   /** Optional free text. Never required. */
@@ -141,6 +145,17 @@ export type ChoiceRecord = {
   expandedOfferIds: string[];
   photoOpens: number;
   dwellMs: number;
+};
+
+/** A correction from the assumption line's correction sheet — a
+ * preference label alongside the override records. */
+export type PreferenceLabel = {
+  id: string;
+  createdAt: string;
+  shopId: string;
+  category: string;
+  field: "urgency" | "tierPreference";
+  value: string;
 };
 
 export interface DataStore {
@@ -219,6 +234,21 @@ export interface DataStore {
     now: string
   ): ChoiceRecord;
   listChoices(): ChoiceRecord[];
+  /** Per-shop price sensitivity learned from the override log: the
+   * share of overrides that picked CHEAPER than the recommendation,
+   * shrunk toward 0.5 with low sample counts. */
+  derivePriceSensitivity(shopId: string): number;
+
+  /** Correction-sheet preference labels. */
+  logPreference(
+    label: Omit<PreferenceLabel, "id" | "createdAt">,
+    now: string
+  ): PreferenceLabel;
+  listPreferences(): PreferenceLabel[];
+
+  /** Chain account policy (admin-only screen; optimizer enforces). */
+  setAccountPolicy(shopId: string, policy: unknown): void;
+  getAccountPolicy(shopId: string): unknown | null;
 }
 
 let counter = 0;
@@ -241,6 +271,8 @@ class InMemoryStore implements DataStore {
   private offerIndex = new Map<string, { sellerId: string; channel: string }>();
   private shopHistory: ShopHistoryEntry[] = [];
   private claims: ClaimRecord[] = [];
+  private preferences: PreferenceLabel[] = [];
+  private policies = new Map<string, unknown>();
 
   createQuote(
     quote: Omit<QuoteRecord, "id" | "createdAt">,
@@ -477,6 +509,40 @@ class InMemoryStore implements DataStore {
   }
   listChoices(): ChoiceRecord[] {
     return [...this.choices];
+  }
+  derivePriceSensitivity(shopId: string): number {
+    const overrides = this.choices.filter(
+      (c) => c.shopId === shopId && !c.agreement && c.deltaPrice != null
+    );
+    if (overrides.length === 0) return 0.5;
+    const cheaper = overrides.filter((c) => (c.deltaPrice ?? 0) < 0).length;
+    const raw = cheaper / overrides.length;
+    // Shrink toward neutral with small samples (k=10 prior strength).
+    const k = 10;
+    return (raw * overrides.length + 0.5 * k) / (overrides.length + k);
+  }
+
+  logPreference(
+    label: Omit<PreferenceLabel, "id" | "createdAt">,
+    now: string
+  ): PreferenceLabel {
+    const full: PreferenceLabel = {
+      ...label,
+      id: nextId("pref"),
+      createdAt: now,
+    };
+    this.preferences.push(full);
+    return full;
+  }
+  listPreferences(): PreferenceLabel[] {
+    return [...this.preferences];
+  }
+
+  setAccountPolicy(shopId: string, policy: unknown): void {
+    this.policies.set(shopId, policy);
+  }
+  getAccountPolicy(shopId: string): unknown | null {
+    return this.policies.get(shopId) ?? null;
   }
 }
 
