@@ -14,6 +14,7 @@
  */
 
 import { createHash } from "crypto";
+import { store } from "@/lib/api/store";
 import type {
   GradeTier,
   PublicOffer,
@@ -99,11 +100,49 @@ const CONNEVERSE_GUARANTEES = [
   "30-Day Returns",
 ];
 
+// ─── Fitment evidence / return terms (anonymized labels) ────────────
+
+function fitmentEvidenceLabel(offering: Offering): string {
+  if (!offering.fitmentVerified) return "Fitment not verified";
+  switch (offering.channel) {
+    case "ebay":
+      return "Marketplace compatibility table for this vehicle";
+    case "local":
+      return "Confirmed by Conneverse ops on the phone";
+    default:
+      return "Distributor catalog fitment";
+  }
+}
+
+function returnTermsLabel(offering: Offering): string {
+  if (!offering.returnsAccepted) return "No returns";
+  return offering.channel === "simulated"
+    ? "30-day returns, Conneverse-backed"
+    : "Returns accepted — Conneverse-backed";
+}
+
+/**
+ * Media rule: a marketplace listing photo may render ONLY after an
+ * internal reviewer approved it (photos can leak seller identity —
+ * watermarks, packaging, storefront branding). Unseen photos are
+ * enqueued as pending and withheld; rejected photos are withheld
+ * forever. Catalog channels return null (UI uses stock imagery).
+ */
+function curatedPhotoUrl(offering: Offering): string | null {
+  if (!offering.imageUrl) return null;
+  const entry = store.ensurePhoto(
+    offering.imageUrl,
+    offering.partName,
+    new Date().toISOString()
+  );
+  return entry.status === "approved" ? entry.url : null;
+}
+
 // ─── Projection ─────────────────────────────────────────────────────
 
 export function toPublicOffer(
   offering: Offering,
-  role: "A" | "B",
+  role: "A" | "B" | "candidate",
   make: string | undefined
 ): PublicOffer {
   return {
@@ -124,7 +163,10 @@ export function toPublicOffer(
     },
     guarantees: CONNEVERSE_GUARANTEES,
     fitmentVerified: offering.fitmentVerified,
+    fitmentEvidence: fitmentEvidenceLabel(offering),
     returnsAccepted: offering.returnsAccepted,
+    returnTerms: returnTermsLabel(offering),
+    photoUrl: curatedPhotoUrl(offering),
     provisional: offering.reliability.provisional,
   };
 }
@@ -140,6 +182,20 @@ export function toPublicSearchResult(
 ): PublicSearchResult {
   const belowBar =
     result.meta.totalConsidered - result.meta.totalAfterFilters;
+
+  // Grid cap: 7 visible — picks pinned (aggregate already ordered them
+  // first), the rest by score.
+  const GRID_CAP = 7;
+  const roleFor = (o: Offering): "A" | "B" | "candidate" =>
+    o.id === result.optionA?.id
+      ? "A"
+      : o.id === result.optionB?.id
+      ? "B"
+      : "candidate";
+  const candidates = result.candidates
+    .slice(0, GRID_CAP)
+    .map((o) => toPublicOffer(o, roleFor(o), make));
+
   const projected: PublicSearchResult = {
     optionA: result.optionA
       ? toPublicOffer(result.optionA, "A", make)
@@ -147,6 +203,7 @@ export function toPublicSearchResult(
     optionB: result.optionB
       ? toPublicOffer(result.optionB, "B", make)
       : null,
+    candidates,
     meta: {
       considered: result.meta.totalConsidered,
       metQualityBar: result.meta.totalAfterFilters,

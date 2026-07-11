@@ -71,6 +71,7 @@ export function simulatedToOfferings(part: Part): Offering[] {
       returnsAccepted: true,
 
       sourceUrl: null,
+      imageUrl: null, // catalog channels use manufacturer stock imagery
     });
   }
 
@@ -164,6 +165,7 @@ export function ebayToOfferings(args: {
       returnsAccepted: true,
 
       sourceUrl: item.itemUrl,
+      imageUrl: item.imageUrl,
     };
   });
 }

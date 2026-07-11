@@ -88,6 +88,9 @@ export type Offering = {
   // ─── Provenance ───
   /** External link for marketplace listings; null for synthetic sources. */
   sourceUrl: string | null;
+  /** Raw listing photo URL (server-side; gated by the curation queue
+   * before any client exposure). Null for catalog-backed channels. */
+  imageUrl: string | null;
 };
 
 /**
@@ -120,6 +123,8 @@ export type GuardrailReason =
 export type AggregateResult = {
   optionA: Offering | null;
   optionB: Offering | null;
+  /** All qualified survivors, ranked best-first (picks included). */
+  candidates: Offering[];
   meta: {
     /** Channels actually queried (excluding stubs that returned []). */
     channelsSearched: Channel[];

@@ -134,6 +134,7 @@ export class ConciergeConnector implements SupplierConnector {
       returnsAccepted: true,
 
       sourceUrl: null,
+      imageUrl: null,
     }));
   }
 

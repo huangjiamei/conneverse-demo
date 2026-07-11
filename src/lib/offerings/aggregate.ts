@@ -156,12 +156,18 @@ export async function aggregateOfferings(
   const optionB =
     recommendations.find((r) => r.role === "B")?.offering ?? null;
 
+  // Copilot grid order: picks pinned first, then the rest by score.
+  const picks = recommendations.filter((r) => r.role !== "candidate");
+  const rest = recommendations.filter((r) => r.role === "candidate");
+  const candidates = [...picks, ...rest].map((r) => r.offering);
+
   // Everything the optimizer/guardrails filtered, for the funnel copy.
   const guardrailDropped = diagnostics.guardrailRejections.length;
 
   return {
     optionA,
     optionB,
+    candidates,
     meta: {
       channelsSearched,
       totalConsidered: all.length + guardrailDropped,

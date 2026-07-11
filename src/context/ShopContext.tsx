@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 
+export type SourcingMode = "copilot" | "autopilot";
+
 export type ShopProfile = {
   shopName: string;
   address: string;
@@ -16,6 +18,13 @@ export type ShopProfile = {
   laborRate: number;
   region: string;
   zipCode: string;
+  /**
+   * Per-category sourcing mode. Copilot (default): the comparison grid
+   * is the default results view, machine picks shown as soft tags.
+   * Autopilot (earned via the graduation dashboard): the two-pick view
+   * is the default — the grid stays one click away.
+   */
+  sourcingModes?: Record<string, SourcingMode>;
 };
 
 export const DEFAULT_SHOP_PROFILE: ShopProfile = {
@@ -34,6 +43,9 @@ type ShopContextValue = {
   setProfile: (profile: ShopProfile) => void;
   clearProfile: () => void;
   isLoaded: boolean;
+  /** Sourcing mode for a category. Copilot unless explicitly flipped. */
+  getSourcingMode: (category: string) => SourcingMode;
+  setSourcingMode: (category: string, mode: SourcingMode) => void;
 };
 
 const ShopContext = createContext<ShopContextValue | null>(null);
@@ -75,9 +87,41 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const getSourcingMode = useCallback(
+    (category: string): SourcingMode =>
+      profile?.sourcingModes?.[category] ?? "copilot",
+    [profile]
+  );
+
+  const setSourcingMode = useCallback(
+    (category: string, mode: SourcingMode) => {
+      setProfileState((current) => {
+        if (!current) return current;
+        const next: ShopProfile = {
+          ...current,
+          sourcingModes: { ...current.sourcingModes, [category]: mode },
+        };
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore storage errors
+        }
+        return next;
+      });
+    },
+    []
+  );
+
   return (
     <ShopContext.Provider
-      value={{ profile, setProfile, clearProfile, isLoaded }}
+      value={{
+        profile,
+        setProfile,
+        clearProfile,
+        isLoaded,
+        getSourcingMode,
+        setSourcingMode,
+      }}
     >
       {children}
     </ShopContext.Provider>

@@ -120,7 +120,9 @@ export const GRADE_TIER_LABEL: Record<GradeTier, string> = {
  */
 export type PublicOffer = {
   id: string;
-  role: "A" | "B";
+  /** "A"/"B" are the machine picks; "candidate" is a ranked survivor
+   * shown in the copilot comparison grid. */
+  role: "A" | "B" | "candidate";
   partName: string;
   partNumber: string;
   brand: string | null;
@@ -135,7 +137,21 @@ export type PublicOffer = {
    * Conneverse stands behind every pick equally. */
   guarantees: string[];
   fitmentVerified: boolean;
+  /** How fitment was established ("Marketplace compatibility table for
+   * this vehicle", "Distributor catalog fitment", …). Never names the
+   * seller. */
+  fitmentEvidence: string;
   returnsAccepted: boolean;
+  /** Human-readable return terms ("30-day returns" / "Seller returns
+   * policy"). */
+  returnTerms: string;
+  /**
+   * Curated listing photo, or null. Listing photos can leak seller
+   * identity, so they pass an internal approve/reject curation queue —
+   * a photo that hasn't been APPROVED never crosses the wire. The UI
+   * falls back to manufacturer stock imagery.
+   */
+  photoUrl: string | null;
   /** New supplier without enough first-party history yet. Surfaced as a
    * subtle qualitative note, never a number. */
   provisional: boolean;
@@ -146,6 +162,12 @@ export type PublicOffer = {
 export type PublicSearchResult = {
   optionA: PublicOffer | null;
   optionB: PublicOffer | null;
+  /**
+   * The copilot comparison grid: every qualified survivor, ranked,
+   * capped at 7 — picks pinned first, the rest by score. The A/B picks
+   * appear here too (same opaque ids) tagged by `role`.
+   */
+  candidates: PublicOffer[];
   meta: {
     considered: number;
     metQualityBar: number;
