@@ -36,7 +36,11 @@ import type {
   PublicOffer,
   PublicSearchResult,
 } from "@/types/canonical";
+import type { CatalogMatch, VinDecode } from "@/lib/connectors/vpic";
+import { isValidVinFormat } from "@/lib/connectors/vpic";
 import type { PartRequest, QuoteLine, Vehicle } from "@/types";
+
+export type VehicleEntryMode = "ymm" | "vin";
 
 export const SEARCH_STEPS = [
   "Searching local distributors...",
@@ -84,7 +88,23 @@ type SourcingContextValue = {
   setMake: (make: string) => void;
   setModel: (model: string) => void;
   setYear: (year: number | "") => void;
+  setVehicle: (make: string, model: string, year: number) => void;
   clearVehicle: () => void;
+
+  // VIN entry
+  entryMode: VehicleEntryMode;
+  setEntryMode: (mode: VehicleEntryMode) => void;
+  vinInput: string;
+  setVinInput: (vin: string) => void;
+  vinDecoding: boolean;
+  vinError: string | null;
+  /** Decoded vehicle awaiting user confirmation, or null. */
+  vinPending: VinDecode | null;
+  /** Catalog reconciliation for the pending decode (null = not covered). */
+  vinCatalogMatch: CatalogMatch;
+  decodeVinInput: () => void;
+  confirmVin: () => void;
+  rejectVin: () => void;
 
   // Part selection
   activeCategory: string;
@@ -158,6 +178,14 @@ export function SourcingProvider({
   const [model, setModelState] = useState("");
   const [year, setYearState] = useState<number | "">("");
 
+  // VIN entry
+  const [entryMode, setEntryMode] = useState<VehicleEntryMode>("ymm");
+  const [vinInput, setVinInput] = useState("");
+  const [vinDecoding, setVinDecoding] = useState(false);
+  const [vinError, setVinError] = useState<string | null>(null);
+  const [vinPending, setVinPending] = useState<VinDecode | null>(null);
+  const [vinCatalogMatch, setVinCatalogMatch] = useState<CatalogMatch>(null);
+
   // Part selection
   const [activeCategory, setActiveCategory] = useState("");
   const [selectedPartId, setSelectedPartId] = useState("");
@@ -215,6 +243,20 @@ export function SourcingProvider({
     setSearchQuery("");
   }, []);
 
+  /** Set all three vehicle fields atomically (no cascade reset) — used
+   * by VIN confirmation, which resolves make+model+year together. */
+  const setVehicle = useCallback(
+    (nextMake: string, nextModel: string, nextYear: number) => {
+      setMakeState(nextMake);
+      setModelState(nextModel);
+      setYearState(nextYear);
+      setActiveCategory("");
+      setSelectedPartId("");
+      setSearchQuery("");
+    },
+    []
+  );
+
   const clearVehicle = useCallback(() => {
     setMakeState("");
     setModelState("");
@@ -222,6 +264,61 @@ export function SourcingProvider({
     setActiveCategory("");
     setSelectedPartId("");
     setSearchQuery("");
+  }, []);
+
+  // ─── VIN decode flow ───
+
+  const decodeVinInput = useCallback(() => {
+    const vin = vinInput.trim().toUpperCase();
+    setVinError(null);
+    setVinPending(null);
+    setVinCatalogMatch(null);
+
+    if (!isValidVinFormat(vin)) {
+      setVinError("Enter a 17-character VIN (letters and digits, no I/O/Q).");
+      return;
+    }
+
+    setVinDecoding(true);
+    fetch("/api/vin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vin }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
+        }
+        setVinPending(data.decode as VinDecode);
+        setVinCatalogMatch((data.catalog as CatalogMatch) ?? null);
+        setVinDecoding(false);
+      })
+      .catch((err: unknown) => {
+        const message =
+          err instanceof Error ? err.message : "Couldn't decode VIN";
+        setVinError(`${message} — try the Year/Make/Model dropdowns instead.`);
+        setVinDecoding(false);
+      });
+  }, [vinInput]);
+
+  const confirmVin = useCallback(() => {
+    if (vinCatalogMatch) {
+      setVehicle(
+        vinCatalogMatch.make,
+        vinCatalogMatch.model,
+        vinCatalogMatch.year
+      );
+    }
+    setVinPending(null);
+    setVinCatalogMatch(null);
+    setVinInput("");
+  }, [vinCatalogMatch, setVehicle]);
+
+  const rejectVin = useCallback(() => {
+    setVinPending(null);
+    setVinCatalogMatch(null);
+    setVinError(null);
   }, []);
 
   // Category pill toggle: clicking the active pill clears it.
@@ -473,7 +570,20 @@ export function SourcingProvider({
     setMake,
     setModel,
     setYear,
+    setVehicle,
     clearVehicle,
+
+    entryMode,
+    setEntryMode,
+    vinInput,
+    setVinInput,
+    vinDecoding,
+    vinError,
+    vinPending,
+    vinCatalogMatch,
+    decodeVinInput,
+    confirmVin,
+    rejectVin,
 
     activeCategory,
     selectCategory,
