@@ -2,10 +2,13 @@
  * POST /api/resolve
  *
  * Body: { vehicle: Vehicle, freeText: string }
- * → { partType, position, oeNumbers[], confidence, partId }
+ * → ResolveResult { taxonomyId, partType, category, position,
+ *                   oeNumbers[], confidence, partId, source }
  *
- * Resolution layer (front half). Simulated matcher today; LLM
- * normalization + consensus OE resolution land in Prompt 3.
+ * Resolution layer, staged: deterministic taxonomy/alias matching
+ * first; LLM normalization (claude-haiku-4-5, constrained to the same
+ * taxonomy) only for input the matcher can't place; graceful "no
+ * match" when neither resolves. The UI confirm-gates every result.
  */
 
 import { NextResponse } from "next/server";
@@ -23,6 +26,6 @@ export const POST = withApi(async (req) => {
       { status: 400 }
     );
   }
-  const result = resolvePart(body.vehicle, body.freeText);
+  const result = await resolvePart(body.vehicle, body.freeText);
   return NextResponse.json(result);
 });

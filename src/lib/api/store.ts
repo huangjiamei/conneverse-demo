@@ -10,7 +10,23 @@
  */
 
 import { createHash } from "crypto";
-import type { PurchaseOrder, QuoteRecord } from "@/types/canonical";
+import type { PurchaseOrder, QuoteRecord, Vehicle } from "@/types/canonical";
+
+/**
+ * One confirmed (freeText → partType) pair — future training data for
+ * the resolver. Written when the user clicks ✓ on the confirm chip.
+ */
+export type ResolutionLogEntry = {
+  id: string;
+  createdAt: string;
+  freeText: string;
+  vehicle: Vehicle;
+  taxonomyId: string;
+  partType: string;
+  position: string | null;
+  partId: string | null;
+  source: "deterministic" | "llm";
+};
 
 export interface DataStore {
   createQuote(quote: Omit<QuoteRecord, "id" | "createdAt">, now: string): QuoteRecord;
@@ -20,6 +36,12 @@ export interface DataStore {
   createOrder(order: Omit<PurchaseOrder, "id" | "createdAt">, now: string): PurchaseOrder;
   getOrder(id: string): PurchaseOrder | null;
   listOrders(): PurchaseOrder[];
+
+  logResolution(
+    entry: Omit<ResolutionLogEntry, "id" | "createdAt">,
+    now: string
+  ): ResolutionLogEntry;
+  listResolutions(): ResolutionLogEntry[];
 }
 
 let counter = 0;
@@ -35,6 +57,7 @@ function nextId(prefix: string): string {
 class InMemoryStore implements DataStore {
   private quotes = new Map<string, QuoteRecord>();
   private orders = new Map<string, PurchaseOrder>();
+  private resolutions: ResolutionLogEntry[] = [];
 
   createQuote(
     quote: Omit<QuoteRecord, "id" | "createdAt">,
@@ -68,6 +91,22 @@ class InMemoryStore implements DataStore {
   }
   listOrders(): PurchaseOrder[] {
     return [...this.orders.values()];
+  }
+
+  logResolution(
+    entry: Omit<ResolutionLogEntry, "id" | "createdAt">,
+    now: string
+  ): ResolutionLogEntry {
+    const record: ResolutionLogEntry = {
+      ...entry,
+      id: nextId("res"),
+      createdAt: now,
+    };
+    this.resolutions.push(record);
+    return record;
+  }
+  listResolutions(): ResolutionLogEntry[] {
+    return [...this.resolutions];
   }
 }
 
