@@ -1,16 +1,29 @@
 /**
  * The aggregator — the heart of the system.
  *
- * Fetches offerings from every channel in parallel and normalizes
- * them. Gating, scoring, and Option A/B selection are delegated to
- * the optimizer (src/lib/optimizer.ts): hard gates first, soft score
- * on the survivors.
+ * Fans out to every registered SupplierConnector in parallel, merges
+ * their offers, then delegates gating, scoring, and Option A/B
+ * selection to the optimizer (src/lib/optimizer.ts): hard gates first,
+ * soft score on the survivors.
+ *
+ * Connectors are the seam: eBay + simulated archetypes + concierge
+ * today; a local-distributor / Amazon / DTC connector drops in with no
+ * change here. Marketplace guardrails run INSIDE each connector, before
+ * the optimizer ever sees a candidate.
  */
 
 import type { Part } from "@/data/parts-catalog";
-import { searchEbayParts, type EbayItem } from "@/lib/ebay-search.ts";
 import { applyGates, optimize } from "@/lib/optimizer";
-import { ebayToOfferings, simulatedToOfferings } from "./adapters.ts";
+import { EbayConnector } from "@/lib/connectors/ebay.ts";
+import { SimulatedConnector } from "@/lib/connectors/simulated.ts";
+import { ConciergeConnector } from "@/lib/connectors/concierge.ts";
+import type {
+  ConnectorContext,
+  ConnectorDiagnostics,
+  SupplierConnector,
+} from "@/lib/connectors/SupplierConnector.ts";
+import { emptyGuardrailCounts } from "@/lib/guardrails.ts";
+import type { Vehicle } from "@/types/canonical";
 import type {
   AggregateResult,
   Channel,
@@ -23,20 +36,28 @@ import type {
 // options" — so a strict floor is correct.
 const RELIABILITY_FLOOR = 0.65;
 
+// The connector registry. Order is irrelevant — the optimizer ranks the
+// merged set. Add a connector here and it's live everywhere.
+const CONNECTORS: SupplierConnector[] = [
+  new SimulatedConnector(),
+  new EbayConnector(),
+  new ConciergeConnector(),
+];
+
 // ─── Public API ─────────────────────────────────────────────────────
 
 export type AggregateInput = {
   part: Part;
   vehicle: { year: number | string; make: string; model: string };
   buyerZip?: string;
-  /** How many eBay results to consider. Default 10. */
+  /** How many marketplace results to consider per connector. Default 10. */
   ebayLimit?: number;
 };
 
 /**
- * Aggregate offerings across all channels and pick the top two.
- * Channels that fail (e.g. eBay 502) are skipped — we don't fail the
- * entire request if one source has a hiccup.
+ * Aggregate offerings across all connectors and pick the top two.
+ * Connectors that fail return `[]` (they swallow their own errors) — we
+ * never fail the whole request because one source had a hiccup.
  */
 export async function aggregateOfferings(
   input: AggregateInput
@@ -44,47 +65,49 @@ export async function aggregateOfferings(
   const start = Date.now();
   const { part, vehicle, buyerZip, ebayLimit = 10 } = input;
 
-  const channelsSearched: Channel[] = [];
+  const partRequest = {
+    partId: part.id,
+    category: part.category,
+    name: part.name,
+  };
+  const normalizedVehicle: Vehicle = {
+    year: Number(vehicle.year),
+    make: vehicle.make,
+    model: vehicle.model,
+  };
+
+  const diagnostics: ConnectorDiagnostics = { guardrailRejections: [] };
+  const ctx: ConnectorContext = {
+    buyerZip,
+    limit: ebayLimit,
+    diagnostics,
+  };
+
+  // Fan out to every connector in parallel.
+  const settled = await Promise.allSettled(
+    CONNECTORS.map((c) => c.getQuotes(partRequest, normalizedVehicle, ctx))
+  );
+
   const all: Offering[] = [];
-
-  // ─── Channel: simulated suppliers (synchronous) ───
-  const simulated = simulatedToOfferings(part);
-  if (simulated.length > 0) {
-    all.push(...simulated);
-    channelsSearched.push("simulated");
-  }
-
-  // ─── Channel: eBay (live) ───
-  // Run in parallel with future channels (Amazon, etc.) by always using
-  // Promise.allSettled — failure of one channel must not block others.
-  const [ebayResult] = await Promise.allSettled([
-    searchEbayParts(part.name, {
-      limit: ebayLimit,
-      vehicle,
-      buyerZip,
-    }),
-  ]);
-
-  if (ebayResult.status === "fulfilled") {
-    const items: EbayItem[] = ebayResult.value;
-    const ebayOfferings = ebayToOfferings({
-      items,
-      partName: part.name,
-      // eBay search used compatibility_filter — by construction, all
-      // returned items pass eBay's fitment table check.
-      fitmentVerified: true,
-    });
-    all.push(...ebayOfferings);
-    channelsSearched.push("ebay");
-  } else {
-    // Log but don't throw — degrade gracefully.
-    console.error(
-      "[aggregator] eBay channel failed:",
-      ebayResult.reason instanceof Error
-        ? ebayResult.reason.message
-        : String(ebayResult.reason)
-    );
-  }
+  const channelsSearched: Channel[] = [];
+  settled.forEach((result, i) => {
+    const connector = CONNECTORS[i];
+    if (result.status === "fulfilled") {
+      if (result.value.length > 0) {
+        all.push(...result.value);
+        if (!channelsSearched.includes(connector.channel)) {
+          channelsSearched.push(connector.channel);
+        }
+      }
+    } else {
+      console.error(
+        `[aggregator] connector "${connector.id}" failed:`,
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason)
+      );
+    }
+  });
 
   // ─── Gate + score + pick (the optimizer) ───
   const demandContext = {
@@ -105,19 +128,29 @@ export async function aggregateOfferings(
   };
   for (const entry of gateLog) rejections[entry.gate]++;
 
+  // Guardrail rejection counts (pre-optimizer, from the connectors).
+  const guardrailRejections = emptyGuardrailCounts();
+  for (const r of diagnostics.guardrailRejections) {
+    guardrailRejections[r.reason]++;
+  }
+
   const optionA =
     recommendations.find((r) => r.role === "A")?.offering ?? null;
   const optionB =
     recommendations.find((r) => r.role === "B")?.offering ?? null;
+
+  // Everything the optimizer/guardrails filtered, for the funnel copy.
+  const guardrailDropped = diagnostics.guardrailRejections.length;
 
   return {
     optionA,
     optionB,
     meta: {
       channelsSearched,
-      totalConsidered: all.length,
+      totalConsidered: all.length + guardrailDropped,
       totalAfterFilters: recommendations.length,
       rejections,
+      guardrailRejections,
       durationMs: Date.now() - start,
     },
   };

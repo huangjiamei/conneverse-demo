@@ -130,14 +130,17 @@ export function toPublicOffer(
 }
 
 /** Project a full internal aggregate result to the client-facing
- * search result. Channel NAMES are dropped — only a count crosses. */
+ * search result. Channel NAMES are dropped — only a count crosses.
+ * `includeDebug` attaches rejection counts (dev-only; the route sets it
+ * from NODE_ENV). Counts carry no seller identity. */
 export function toPublicSearchResult(
   result: AggregateResult,
-  make: string | undefined
+  make: string | undefined,
+  includeDebug = false
 ): PublicSearchResult {
   const belowBar =
     result.meta.totalConsidered - result.meta.totalAfterFilters;
-  return {
+  const projected: PublicSearchResult = {
     optionA: result.optionA
       ? toPublicOffer(result.optionA, "A", make)
       : null,
@@ -152,4 +155,11 @@ export function toPublicSearchResult(
       durationMs: result.meta.durationMs,
     },
   };
+  if (includeDebug) {
+    projected.debug = {
+      guardrailRejections: result.meta.guardrailRejections,
+      gateRejections: result.meta.rejections,
+    };
+  }
+  return projected;
 }

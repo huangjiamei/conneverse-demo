@@ -6,9 +6,9 @@
  * concatenates the output of each adapter.
  */
 
-import type { Part, SupplierEntry } from "@/data/parts-catalog";
+import type { Part } from "@/data/parts-catalog";
 import { SUPPLIERS } from "@/data/suppliers";
-import type { EbayItem } from "@/lib/ebay-search.ts";
+import type { NormalizedEbayItem } from "@/lib/guardrails.ts";
 import type { Condition, Offering } from "./types.ts";
 import {
   reliabilityFromEbay,
@@ -58,6 +58,7 @@ export function simulatedToOfferings(part: Part): Offering[] {
       shippingCost: 0, // simulated suppliers bundle shipping in price
       landedPrice: se.price,
       currency: "USD",
+      qtyIncluded: 1,
 
       deliveryDays: se.deliveryDays,
       deliveryLabel: se.deliveryLabel,
@@ -92,11 +93,13 @@ function parseWarrantyDays(warranty: string | undefined): number | null {
 // ─── eBay marketplace ────────────────────────────────────────────────
 
 /**
- * Convert eBay search results to Offerings. The eBay API has already
- * been called by the aggregator; this is pure transformation.
+ * Convert guardrail-normalized eBay items to Offerings. The eBay API
+ * has already been called and the guardrails have already run — this is
+ * pure transformation. Prices are per-unit (kit normalization applied
+ * by the guardrails), so a "set of 4" competes on the price of one.
  */
 export function ebayToOfferings(args: {
-  items: EbayItem[];
+  items: NormalizedEbayItem[];
   /** The part being searched for, used for partName fallback. */
   partName: string;
   /** Did the search use eBay's compatibility_filter? */
@@ -106,8 +109,11 @@ export function ebayToOfferings(args: {
   const now = Date.now();
 
   return items.map((item): Offering => {
-    const shipping = item.shippingCost ?? 0;
-    const landedPrice = item.price + shipping;
+    // Kit normalization: compare per-unit prices, not pack prices.
+    const unitItemPrice = item.unitPrice;
+    const shipping =
+      item.shippingCost != null ? item.shippingCost / item.qtyIncluded : 0;
+    const landedPrice = unitItemPrice + shipping;
 
     const reliability = reliabilityFromEbay({
       sellerUsername: item.seller.username,
@@ -134,10 +140,11 @@ export function ebayToOfferings(args: {
       brand: extractBrand(item.title),
       condition: mapEbayCondition(item.condition),
 
-      itemPrice: item.price,
+      itemPrice: unitItemPrice,
       shippingCost: shipping,
       landedPrice,
       currency: item.currency || "USD",
+      qtyIncluded: item.qtyIncluded,
 
       deliveryDays,
       deliveryLabel,

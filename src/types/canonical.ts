@@ -153,6 +153,15 @@ export type PublicSearchResult = {
     sourcesSearched: number;
     durationMs: number;
   };
+  /**
+   * Dev-only diagnostics — rejection counts (no seller identity). Present
+   * only when the server runs outside production; the client renders it
+   * as a debug panel. Omitted entirely in production.
+   */
+  debug?: {
+    guardrailRejections: Record<string, number>;
+    gateRejections: Record<string, number>;
+  };
 };
 
 // ─── Purchase order & quote ─────────────────────────────────────────

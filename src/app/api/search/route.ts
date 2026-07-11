@@ -51,5 +51,9 @@ export const POST = withApi(async (req) => {
     buyerZip: body.zip?.trim() || undefined,
   });
 
-  return NextResponse.json(toPublicSearchResult(result, vehicle.make));
+  // Debug diagnostics (rejection counts) only outside production.
+  const includeDebug = process.env.NODE_ENV !== "production";
+  return NextResponse.json(
+    toPublicSearchResult(result, vehicle.make, includeDebug)
+  );
 });

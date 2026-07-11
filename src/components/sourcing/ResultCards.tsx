@@ -11,7 +11,7 @@
  */
 
 import { useState } from "react";
-import { ShieldCheck, Sparkles } from "lucide-react";
+import { Bug, ShieldCheck, Sparkles } from "lucide-react";
 import { useSourcing } from "@/context/SourcingContext";
 import { formatPrice } from "@/lib/format";
 import type { PublicOffer } from "@/types/canonical";
@@ -151,6 +151,91 @@ function OfferingCard({
   );
 }
 
+// ─── Dev-only debug panel ───────────────────────────────────────────
+//
+// Rendered only when the server attached `debug` (development builds).
+// Shows why candidates were dropped — guardrails (pre-optimizer, on raw
+// marketplace listings) and gates (optimizer reliability/fitment). Counts
+// only; no seller identity.
+
+const GUARDRAIL_LABELS: Record<string, string> = {
+  oe_family_mismatch: "OE/part-type mismatch",
+  wrong_platform: "Wrong platform",
+  universal_or_accessory: "Universal / accessory",
+  junk_price: "Junk price (≤$1)",
+  placeholder_part_number: "Placeholder part #",
+  used_or_refurb_segmented: "Used / refurb (segmented)",
+};
+
+const GATE_LABELS: Record<string, string> = {
+  out_of_stock: "Out of stock",
+  not_fitment_verified: "Fitment not verified",
+  below_reliability_floor: "Below reliability floor",
+  quality_too_low: "Quality too low",
+  missing_price: "Missing price",
+  missing_delivery: "Missing delivery",
+};
+
+function DebugPanel({
+  debug,
+}: {
+  debug: NonNullable<
+    ReturnType<typeof useSourcing>["aggregate"]
+  >["debug"];
+}) {
+  const [open, setOpen] = useState(false);
+  if (!debug) return null;
+
+  const rows = (
+    obj: Record<string, number>,
+    labels: Record<string, string>
+  ) =>
+    Object.entries(obj)
+      .filter(([, n]) => n > 0)
+      .map(([k, n]) => (
+        <div key={k} className="flex justify-between text-[11px]">
+          <span className="text-gray-500">{labels[k] ?? k}</span>
+          <span className="tabular-nums text-gray-700">{n}</span>
+        </div>
+      ));
+
+  const guardrailRows = rows(debug.guardrailRejections, GUARDRAIL_LABELS);
+  const gateRows = rows(debug.gateRejections, GATE_LABELS);
+
+  return (
+    <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50/60">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium text-gray-500 hover:text-gray-700"
+      >
+        <Bug size={12} />
+        Debug — why candidates were dropped
+        <span className="ml-auto text-gray-400">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+              Guardrails (pre-optimizer)
+            </p>
+            {guardrailRows.length > 0 ? guardrailRows : (
+              <p className="text-[11px] text-gray-400">none</p>
+            )}
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+              Gates (optimizer)
+            </p>
+            {gateRows.length > 0 ? gateRows : (
+              <p className="text-[11px] text-gray-400">none</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── The results zone ───────────────────────────────────────────────
 
 export function ResultCards() {
@@ -275,6 +360,8 @@ export function ResultCards() {
           </p>
         </div>
       )}
+
+      <DebugPanel debug={aggregate.debug} />
     </div>
   );
 }

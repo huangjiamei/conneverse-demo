@@ -68,6 +68,10 @@ export type Offering = {
   /** itemPrice + shippingCost. Used for price comparisons. */
   landedPrice: number;
   currency: string;
+  /** Units in the listing (a "set of 4" is 4). Prices above are already
+   * normalized to per-unit so a pair's price is never compared to a
+   * single. */
+  qtyIncluded: number;
 
   // ─── When ───
   /** Days from now until earliest delivery. 0 = today, 1 = tomorrow. */
@@ -99,6 +103,20 @@ export type RejectionReason =
   | "missing_price"
   | "missing_delivery";
 
+/**
+ * Reasons a raw marketplace candidate is rejected by the guardrails —
+ * the hard filters that run BEFORE any candidate reaches the optimizer.
+ * Distinct from RejectionReason (which is the optimizer's reliability/
+ * fitment gates on already-normalized offerings).
+ */
+export type GuardrailReason =
+  | "oe_family_mismatch"
+  | "wrong_platform"
+  | "universal_or_accessory"
+  | "junk_price"
+  | "placeholder_part_number"
+  | "used_or_refurb_segmented";
+
 export type AggregateResult = {
   optionA: Offering | null;
   optionB: Offering | null;
@@ -109,8 +127,10 @@ export type AggregateResult = {
     totalConsidered: number;
     /** Offerings that passed all hard filters. */
     totalAfterFilters: number;
-    /** Why the rejected ones were rejected. */
+    /** Why the rejected ones were rejected (optimizer gates). */
     rejections: Record<RejectionReason, number>;
+    /** Guardrail rejections (pre-optimizer, marketplace-listing filters). */
+    guardrailRejections: Record<GuardrailReason, number>;
     /** Wall-clock duration of the aggregation. */
     durationMs: number;
   };
