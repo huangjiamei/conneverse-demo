@@ -32,7 +32,10 @@ import {
 } from "@/data/parts-catalog";
 import { SHOP_CONFIG } from "@/data/shop-config";
 import { useShop } from "@/context/ShopContext";
-import type { AggregateResult, Offering } from "@/lib/offerings/index.ts";
+import type {
+  PublicOffer,
+  PublicSearchResult,
+} from "@/types/canonical";
 import type { PartRequest, QuoteLine, Vehicle } from "@/types";
 
 export const SEARCH_STEPS = [
@@ -103,19 +106,19 @@ type SourcingContextValue = {
   searchProgress: number;
   resultsVisible: boolean;
 
-  // Aggregator
-  aggregate: AggregateResult | null;
+  // Aggregator (client-facing public projection)
+  aggregate: PublicSearchResult | null;
   aggregating: boolean;
   aggregateError: string | null;
-  optionA: Offering | null;
-  optionB: Offering | null;
+  optionA: PublicOffer | null;
+  optionB: PublicOffer | null;
   hasResults: boolean;
   savings: number;
   savingsPct: number;
 
   // Quote
   quoteItems: QuoteLine[];
-  addToQuote: (offering: Offering, part: Part, option: "A" | "B") => void;
+  addToQuote: (offering: PublicOffer, part: Part, option: "A" | "B") => void;
   updateQty: (id: string, delta: number) => void;
   removeItem: (id: string) => void;
   clearQuote: () => void;
@@ -171,7 +174,7 @@ export function SourcingProvider({
   const [resultsVisible, setResultsVisible] = useState(false);
 
   // Aggregator results (Option A + Option B + funnel metadata)
-  const [aggregate, setAggregate] = useState<AggregateResult | null>(null);
+  const [aggregate, setAggregate] = useState<PublicSearchResult | null>(null);
   const [aggregating, setAggregating] = useState(false);
   const [aggregateError, setAggregateError] = useState<string | null>(null);
 
@@ -282,23 +285,23 @@ export function SourcingProvider({
     setAggregating(true);
     setAggregateError(null);
 
-    const params = new URLSearchParams({
-      partId: selectedPartId,
-      year: String(year),
-      make,
-      model,
-    });
-    if (profile?.zipCode) params.set("zip", profile.zipCode);
-    const url = `/api/offerings?${params.toString()}`;
-
-    fetch(url, { signal: controller.signal })
+    fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicle: { year, make, model },
+        partRequest: { partId: selectedPartId },
+        zip: profile?.zipCode,
+      }),
+      signal: controller.signal,
+    })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
         }
         if (!controller.signal.aborted) {
-          setAggregate(data as AggregateResult);
+          setAggregate(data as PublicSearchResult);
           setAggregating(false);
         }
       })
@@ -369,53 +372,49 @@ export function SourcingProvider({
 
   // ─── Derived: results ───
 
-  const optionA: Offering | null = aggregate?.optionA ?? null;
-  const optionB: Offering | null = aggregate?.optionB ?? null;
+  const optionA: PublicOffer | null = aggregate?.optionA ?? null;
+  const optionB: PublicOffer | null = aggregate?.optionB ?? null;
   const hasResults = !!(optionA || optionB);
 
   // Savings calculation — Option B's price advantage over Option A.
   const savings =
-    optionA && optionB ? optionA.landedPrice - optionB.landedPrice : 0;
+    optionA && optionB ? optionA.price - optionB.price : 0;
   const savingsPct =
     optionA && savings > 0
-      ? Math.round((savings / optionA.landedPrice) * 100)
+      ? Math.round((savings / optionA.price) * 100)
       : 0;
 
   // ─── Quote actions ───
 
   const addToQuote = useCallback(
-    (offering: Offering, part: Part, option: "A" | "B") => {
+    (offering: PublicOffer, part: Part, option: "A" | "B") => {
       setQuoteItems((items) => {
+        // Dedup on the opaque offer id — the client never sees seller
+        // identity, so `supplierId` here is the anonymized token.
         const existing = items.find(
           (qi) =>
             qi.partNumber === part.partNumber &&
-            qi.supplierId === offering.sellerId
+            qi.supplierId === offering.id
         );
         if (existing) {
           return items.map((qi) =>
             qi.id === existing.id ? { ...qi, qty: qi.qty + 1 } : qi
           );
         }
-        const warrantyLabel =
-          offering.warrantyDays != null
-            ? offering.warrantyDays >= 30
-              ? `${Math.round(offering.warrantyDays / 30)} mo warranty`
-              : `${offering.warrantyDays} day warranty`
-            : offering.condition === "new"
-            ? "Seller warranty"
-            : "As-is";
         return [
           ...items,
           {
-            id: `${part.id}-${offering.sellerId}-${Date.now()}`,
+            id: `${part.id}-${offering.id}-${Date.now()}`,
             partName: part.name,
             partNumber: part.partNumber,
             brand: offering.brand ?? "—",
-            supplierId: offering.sellerId,
-            supplierName: offering.sellerName,
-            price: offering.landedPrice,
-            warranty: warrantyLabel,
-            deliveryLabel: offering.deliveryLabel,
+            supplierId: offering.id,
+            // Attribution is always Conneverse — seller identity is
+            // never exposed to the client (directive 6).
+            supplierName: "Fulfilled by Conneverse",
+            price: offering.price,
+            warranty: offering.warranty,
+            deliveryLabel: offering.deliveryEstimate.label,
             qty: 1,
             option,
             category: part.category,

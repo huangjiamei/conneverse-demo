@@ -21,11 +21,16 @@
  *
  * Error responses:
  *   400  bad / missing query params
+ *   401  no session (this route exposes seller-identifying eBay data,
+ *        so it is gated behind withApi — internal/debug use only, NOT a
+ *        client-facing surface)
+ *   429  rate limited
  *   502  eBay rejected the upstream request
  *   500  unexpected server error
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { withApi } from "@/lib/api/with-api";
 import {
   searchEbayParts,
   type SearchOptions,
@@ -44,7 +49,7 @@ function isValidSort(value: string): value is SortValue {
   return (VALID_SORTS as readonly string[]).includes(value);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApi(async (request: NextRequest) => {
   const params = request.nextUrl.searchParams;
 
   const q = params.get("q")?.trim();
@@ -130,4 +135,4 @@ export async function GET(request: NextRequest) {
       { status: isUpstream ? 502 : 500 }
     );
   }
-}
+});

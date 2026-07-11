@@ -1,32 +1,28 @@
 "use client";
 
 /**
- * The aggregated results zone: funnel header (the demo's visible value
- * prop), the Option A / Option B cards, the strict-mode empty state,
- * and the aggregator error state.
+ * The results zone: funnel header (directive-7 language), the Option A /
+ * Option B cards, the strict-mode empty state, and the error state.
+ *
+ * Anonymized per directives 6 & 7: cards attribute "Fulfilled by
+ * Conneverse" (no seller/channel), express quality as a grade-tier
+ * badge (no numbers), and carry a uniform Conneverse guarantee. The
+ * cheaper Option B explicitly notes it carries the same guarantee.
  */
 
 import { useState } from "react";
-import {
-  ChevronDown,
-  ExternalLink,
-  Sparkles,
-} from "lucide-react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 import { useSourcing } from "@/context/SourcingContext";
 import { formatPrice } from "@/lib/format";
-import type { Offer, Part } from "@/types";
+import type { PublicOffer } from "@/types/canonical";
+import type { Part } from "@/types";
 import { GuaranteeBadges } from "./GuaranteeBadges";
-import { ReliabilityBreakdown } from "./ReliabilityBreakdown";
+import { GradeTierBadge } from "./GradeTierBadge";
 
-function channelDisplayLabel(o: Offer): string {
-  // What appears as the chip on a card. eBay marketplace listings get
-  // their seller feedback %; simulated suppliers get their "type"
-  // (Local Distributor, National Chain, etc.).
-  if (o.channel === "ebay") {
-    const fp = o.reliability.marketplace;
-    return `${o.channelLabel} · ${(fp * 100).toFixed(1)}% pos`;
-  }
-  return o.channelLabel;
+function conditionLabel(condition: PublicOffer["condition"]): string {
+  return condition === "new"
+    ? "New"
+    : condition[0].toUpperCase() + condition.slice(1);
 }
 
 // ─── One option card ────────────────────────────────────────────────
@@ -39,18 +35,14 @@ function OfferingCard({
   savingsPct,
   pulsing,
   onAdd,
-  expanded,
-  onToggleExpanded,
 }: {
-  offering: Offer;
+  offering: PublicOffer;
   variant: "A" | "B";
   selectedPart: Part;
   savings: number;
   savingsPct: number;
   pulsing: boolean;
   onAdd: () => void;
-  expanded: boolean;
-  onToggleExpanded: () => void;
 }) {
   const isA = variant === "A";
 
@@ -73,7 +65,7 @@ function OfferingCard({
           )}
         </div>
         <p className="text-base font-semibold text-dark">
-          {offering.deliveryLabel}
+          {offering.deliveryEstimate.label}
         </p>
 
         <hr className="my-3 border-gray-100" />
@@ -103,59 +95,44 @@ function OfferingCard({
           {selectedPart.name}
         </p>
         <p className="text-[13px] text-gray-400 mt-0.5">
-          {offering.brand ?? "—"} &middot;{" "}
-          {offering.condition === "new"
-            ? "New"
-            : offering.condition[0].toUpperCase() +
-              offering.condition.slice(1)}
+          {offering.brand ?? "—"} &middot; {conditionLabel(offering.condition)}
         </p>
 
-        {/* Source + reliability — the moat */}
-        <div className="mt-3 p-2.5 bg-gray-50/70 rounded-lg border border-gray-100">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[12px] text-gray-600 min-w-0">
-              <span className="shrink-0">Sourced from</span>
-              <span className="font-medium text-dark truncate">
-                {offering.sellerName}
-              </span>
-            </div>
-            <button
-              onClick={onToggleExpanded}
-              className="inline-flex items-center gap-0.5 text-[12px] font-medium text-gray-600 hover:text-dark shrink-0"
-            >
-              <span>
-                {Math.round(offering.reliability.composite * 100)}
-                %
-              </span>
-              <ChevronDown
-                size={11}
-                className={`transition-transform ${
-                  expanded ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-          </div>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            {channelDisplayLabel(offering)}
-          </p>
-          {expanded && <ReliabilityBreakdown offering={offering} />}
+        {/* Grade tier + warranty — quality without numbers (directive 7) */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <GradeTierBadge tier={offering.gradeTier} />
+          <span className="text-[11px] text-gray-500">{offering.warranty}</span>
+        </div>
+
+        {/* Attribution — always Conneverse (directive 6) */}
+        <div className="mt-3 flex items-center gap-1.5 text-[12px] text-gray-500">
+          <ShieldCheck size={13} className="text-teal shrink-0" />
+          <span>Fulfilled by Conneverse</span>
+          {offering.provisional && (
+            <span className="text-[11px] text-gray-400">· newly onboarded</span>
+          )}
         </div>
 
         <hr className="my-3 border-gray-100" />
 
         <p className="text-[28px] font-bold text-[#1B2838]">
-          {formatPrice(offering.landedPrice)}
+          {formatPrice(offering.price)}
         </p>
         {offering.shippingCost > 0 && (
           <p className="text-[11px] text-gray-400">
-            Includes {formatPrice(offering.shippingCost)}{" "}
-            shipping
+            Includes {formatPrice(offering.shippingCost)} shipping
           </p>
         )}
 
         <div className="mt-3">
           <GuaranteeBadges offering={offering} />
         </div>
+
+        {!isA && (
+          <p className="mt-2 text-[11px] text-gray-400">
+            Same Conneverse guarantee as Option A.
+          </p>
+        )}
 
         <button
           onClick={onAdd}
@@ -169,18 +146,6 @@ function OfferingCard({
         >
           Add to Quote &rarr;
         </button>
-
-        {offering.sourceUrl && (
-          <a
-            href={offering.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 flex items-center justify-center gap-1 text-[11px] text-gray-400 hover:text-gray-600"
-          >
-            View original listing{" "}
-            <ExternalLink size={10} />
-          </a>
-        )}
       </div>
     </div>
   );
@@ -208,12 +173,8 @@ export function ResultCards() {
   } = useSourcing();
 
   const [pulsingButton, setPulsingButton] = useState<string | null>(null);
-  const [expandedReliability, setExpandedReliability] = useState<
-    Record<string, boolean>
-  >({});
 
   const busy = isSearching || aggregating;
-
   if (busy || !selectedPart) return null;
 
   if (aggregateError) {
@@ -231,10 +192,7 @@ export function ResultCards() {
 
   if (!aggregate) return null;
 
-  const toggleExpanded = (id: string) =>
-    setExpandedReliability((s) => ({ ...s, [id]: !s[id] }));
-
-  const handleAdd = (offering: Offer, variant: "A" | "B") => {
+  const handleAdd = (offering: PublicOffer, variant: "A" | "B") => {
     addToQuote(offering, selectedPart, variant);
     setPulsingButton(variant);
     setTimeout(() => setPulsingButton(null), 600);
@@ -246,35 +204,28 @@ export function ResultCards() {
         resultsVisible ? "opacity-100" : "opacity-0"
       }`}
     >
-      {/* Funnel header — the demo's visible value prop */}
+      {/* Funnel header — directive 7 language */}
       <div className="bg-teal/5 rounded-lg border border-teal/15 px-4 py-3 mb-5">
         <div className="flex items-start gap-2.5 text-sm">
-          <Sparkles
-            size={16}
-            className="text-teal mt-0.5 shrink-0"
-          />
+          <Sparkles size={16} className="text-teal mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-dark font-medium">
-              Compared {aggregate.meta.totalConsidered} offerings
-              across {aggregate.meta.channelsSearched.length} channel
-              {aggregate.meta.channelsSearched.length === 1
-                ? ""
-                : "s"}{" "}
-              in {(aggregate.meta.durationMs / 1000).toFixed(1)}s.
-            </p>
-            <p className="text-[12px] text-gray-500 mt-0.5">
-              {aggregate.meta.totalAfterFilters} passed quality +
-              reliability gates
-              {aggregate.meta.totalConsidered -
-                aggregate.meta.totalAfterFilters >
-                0 && (
+              {aggregate.meta.metQualityBar} match
+              {aggregate.meta.metQualityBar === 1 ? "" : "es"} met the
+              Conneverse quality bar
+              {aggregate.meta.belowBar > 0 && (
                 <>
-                  {" · "}
-                  {aggregate.meta.totalConsidered -
-                    aggregate.meta.totalAfterFilters}{" "}
-                  filtered out
+                  {" "}· {aggregate.meta.belowBar} didn&rsquo;t and aren&rsquo;t
+                  shown
                 </>
               )}
+              .
+            </p>
+            <p className="text-[12px] text-gray-500 mt-0.5">
+              Compared {aggregate.meta.considered} offerings across{" "}
+              {aggregate.meta.sourcesSearched} source
+              {aggregate.meta.sourcesSearched === 1 ? "" : "s"} in{" "}
+              {(aggregate.meta.durationMs / 1000).toFixed(1)}s
               {hasResults ? " · Top 2 picks below." : "."}
             </p>
           </div>
@@ -292,8 +243,6 @@ export function ResultCards() {
               savingsPct={savingsPct}
               pulsing={pulsingButton === "A"}
               onAdd={() => handleAdd(optionA, "A")}
-              expanded={!!expandedReliability[optionA.id]}
-              onToggleExpanded={() => toggleExpanded(optionA.id)}
             />
           )}
           {optionB && (
@@ -305,8 +254,6 @@ export function ResultCards() {
               savingsPct={savingsPct}
               pulsing={pulsingButton === "B"}
               onAdd={() => handleAdd(optionB, "B")}
-              expanded={!!expandedReliability[optionB.id]}
-              onToggleExpanded={() => toggleExpanded(optionB.id)}
             />
           )}
         </div>
@@ -316,12 +263,11 @@ export function ResultCards() {
             No quality-verified options for this part right now.
           </p>
           <p className="text-sm text-gray-400 mb-3 max-w-md mx-auto">
-            We searched {aggregate.meta.totalConsidered} listings
-            across {aggregate.meta.channelsSearched.length} channel
-            {aggregate.meta.channelsSearched.length === 1 ? "" : "s"}.{" "}
-            {aggregate.meta.totalAfterFilters} passed quality +
-            reliability gates &mdash; but none met our standards for{" "}
-            {year} {make} {model}.
+            We searched {aggregate.meta.considered} listings across{" "}
+            {aggregate.meta.sourcesSearched} source
+            {aggregate.meta.sourcesSearched === 1 ? "" : "s"}.{" "}
+            {aggregate.meta.metQualityBar} met the Conneverse quality bar
+            &mdash; but none cleared our standards for {year} {make} {model}.
           </p>
           <p className="text-xs text-gray-400">
             Try another part, or check back later as suppliers refresh
