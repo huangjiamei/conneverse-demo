@@ -42,3 +42,5 @@ next-env.d.ts
 
 # local agent / IDE config (contains machine-specific paths)
 .claude/
+
+/src/generated/prisma
