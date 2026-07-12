@@ -1,92 +1,183 @@
 /**
  * POST /api/search
  *
- * Body: { vehicle: {year, make, model}, partRequest: { partId }, zip?,
- *         urgency?, tierPreference?, preferredBrands?, shopId? }
- * → PublicSearchResult (optionA/optionB as PublicOffer + funnel meta)
+ * Body: { partLineId: string, useLlm?: boolean }
  *
- * Aggregates every channel, runs the demand-aware optimizer v3
- * (gates → context-weighted score), and returns ONLY the anonymized
- * public projection — no seller/channel identity, no numeric scores.
+ * 流程:
+ *   1. 用 Prisma 从 DB 读 PartLine + RepairOrder,组装 source_part_info
+ *   2. 调 Python matcher 服务 (MATCHER_URL/api/match)
+ *   3. 把返回结果存进 MatchSearch + Candidate(审计留档)
+ *   4. 返回给前端可消费的 JSON
  *
- * Context, not knobs: urgency is the only per-search user input;
- * vehicleClass/partCriticality are derived server-side; the shop's
- * account policy is looked up by shopId and silently enforced; price
- * sensitivity is learned from the shop's override log.
+ * MVP 阶段不套 withApi 的 session gate(用 curl 验证不方便)。
+ * 前端接入时再套回来。
  */
 
 import { NextResponse } from "next/server";
-import { withApi, readJson } from "@/lib/api/with-api";
-import { PARTS_CATALOG } from "@/data/parts-catalog";
-import { store } from "@/lib/api/store";
-import { aggregateOfferings } from "@/lib/offerings/aggregate";
-import { toPublicSearchResult } from "@/lib/offerings/public-projection";
-import type { AccountPolicy, Urgency } from "@/lib/optimizer";
-import type { GradeTier } from "@/types/canonical";
+import { prisma } from "@/lib/prisma";
 
-const URGENCIES: Urgency[] = ["on_lift", "scheduled_48h", "scheduled_week"];
+const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
 type Body = {
-  vehicle?: { year: number; make: string; model: string };
-  partRequest?: { partId: string };
-  zip?: string;
-  urgency?: Urgency;
-  tierPreference?: GradeTier;
-  preferredBrands?: string[];
-  shopId?: string;
+  partLineId?: string;
+  useLlm?: boolean;
 };
 
-export const POST = withApi(async (req) => {
-  const body = await readJson<Body>(req);
-  const { vehicle, partRequest } = body;
+// Matcher 返回的候选形状(只挑 route 会用到的字段)
+type MatcherCandidate = {
+  title?: string;
+  subtitle?: string;
+  part_number_list?: string[];
+  part_number_list_normalized?: string[];
+  compatibility?: Record<string, unknown>;
+  condition?: string;
+  item_id?: string;
+  item_web_url?: string;
+  price?: { value?: string; currency?: string } | null;
+  candidate_label?: number | null;
+  candidate_label_source?: string;
+};
 
-  if (!vehicle?.year || !vehicle.make || !vehicle.model || !partRequest?.partId) {
+type MatcherResponse = {
+  source_part_info?: unknown;
+  candidate_info_list?: MatcherCandidate[];
+  label?: number | null;
+  label_source?: string;
+  dataset_meta?: Record<string, unknown>;
+};
+
+export async function POST(req: Request) {
+  let body: Body;
+  try {
+    body = (await req.json()) as Body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { partLineId, useLlm = false } = body;
+  if (!partLineId) {
     return NextResponse.json(
-      {
-        error:
-          "Body must include { vehicle: {year, make, model}, partRequest: {partId} }",
-      },
+      { error: "Body must include { partLineId: string }" },
       { status: 400 }
     );
   }
 
-  const part = PARTS_CATALOG.find((p) => p.id === partRequest.partId);
-  if (!part) {
-    return NextResponse.json(
-      { error: `Unknown partId: ${partRequest.partId}` },
-      { status: 400 }
-    );
-  }
-
-  const urgency =
-    body.urgency && URGENCIES.includes(body.urgency)
-      ? body.urgency
-      : undefined;
-  const accountPolicy = body.shopId
-    ? ((store.getAccountPolicy(body.shopId) as AccountPolicy | null) ??
-      undefined)
-    : undefined;
-  const priceSensitivity = body.shopId
-    ? store.derivePriceSensitivity(body.shopId)
-    : undefined;
-
-  const result = await aggregateOfferings({
-    part,
-    vehicle,
-    buyerZip: body.zip?.trim() || undefined,
-    demand: {
-      urgency,
-      tierPreference: body.tierPreference,
-      preferredBrands: body.preferredBrands,
-      accountPolicy,
-      priceSensitivity,
-    },
+  // 1. 从数据库读 PartLine + RepairOrder
+  const partLine = await prisma.partLine.findUnique({
+    where: { id: partLineId },
+    include: { repairOrder: true },
   });
 
-  // Debug diagnostics (rejection counts, weights, scores) only outside
-  // production.
-  const includeDebug = process.env.NODE_ENV !== "production";
-  return NextResponse.json(
-    toPublicSearchResult(result, vehicle.make, includeDebug)
-  );
-});
+  if (!partLine) {
+    return NextResponse.json(
+      { error: `PartLine not found: ${partLineId}` },
+      { status: 404 }
+    );
+  }
+
+  const ro = partLine.repairOrder;
+
+  // 2. 组装 source_part_info(matcher 期待的形状)
+  const sourcePartInfo = {
+    vehicle: {
+      year: String(ro.vehicleYear),
+      make: ro.vehicleMake,
+      model_guess: ro.vehicleModel,
+      vehicle_raw: ro.vehicleRaw,
+    },
+    part_description: partLine.partDescription,
+    part_type: partLine.partTypeRaw ?? "",
+    part_number: partLine.partNumber ?? "",
+  };
+
+  // 3. 调 matcher
+  const matcherStartMs = Date.now();
+  let matcherRes: Response;
+  try {
+    matcherRes = await fetch(`${MATCHER_URL}/api/match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source_part_info: sourcePartInfo,
+        use_llm: useLlm,
+      }),
+    });
+  } catch (err) {
+    // matcher 服务没起来 / 网络问题
+    const detail = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: "Failed to reach matcher service", detail, matcherUrl: MATCHER_URL },
+      { status: 502 }
+    );
+  }
+
+  if (!matcherRes.ok) {
+    const errText = await matcherRes.text();
+    return NextResponse.json(
+      {
+        error: "Matcher service returned an error",
+        status: matcherRes.status,
+        detail: errText.slice(0, 500),
+      },
+      { status: 502 }
+    );
+  }
+
+  const matcherData = (await matcherRes.json()) as MatcherResponse;
+  const matcherDurationMs = Date.now() - matcherStartMs;
+  const candidates = matcherData.candidate_info_list ?? [];
+
+  // 4. 存 MatchSearch + Candidate(审计留档)
+  const matchSearch = await prisma.matchSearch.create({
+    data: {
+      partLineId: partLine.id,
+      queryVehicleYear: ro.vehicleYear,
+      queryVehicleMake: ro.vehicleMake,
+      queryVehicleModel: ro.vehicleModel,
+      queryPartDescription: partLine.partDescription,
+      queryPartNumber: partLine.partNumber,
+      matcherLabel: matcherData.label ?? null,
+      labelSource: matcherData.label_source ?? null,
+      candidateCount: candidates.length,
+      rawResponse: matcherData as object,
+      candidates: {
+        create: candidates.map((c, idx) => ({
+          rank: idx + 1,
+          ebayItemId: c.item_id ?? "",
+          title: c.title ?? "",
+          price: c.price?.value ? c.price.value : "0",
+          currency: c.price?.currency ?? "USD",
+          itemUrl: c.item_web_url ?? "",
+          condition: c.condition ?? null,
+          candidateLabel: c.candidate_label ?? null,
+          labelSource: c.candidate_label_source ?? null,
+        })),
+      },
+    },
+    include: { candidates: true },
+  });
+
+  // 5. 返回给前端
+  return NextResponse.json({
+    matchSearchId: matchSearch.id,
+    label: matcherData.label,
+    labelSource: matcherData.label_source,
+    candidateCount: candidates.length,
+    candidates: matchSearch.candidates.map((c) => ({
+      id: c.id,
+      rank: c.rank,
+      title: c.title,
+      price: c.price,
+      currency: c.currency,
+      itemUrl: c.itemUrl,
+      condition: c.condition,
+      candidateLabel: c.candidateLabel,
+      labelSource: c.labelSource,
+      ebayItemId: c.ebayItemId,
+    })),
+    meta: {
+      matcherDurationMs,
+      query: sourcePartInfo,
+    },
+  });
+}

@@ -1,53 +1,20 @@
-"use client";
-
-/**
- * Standalone-app shell: composes the providers, the embeddable
- * SourcingPanel, and the quote builder. All sourcing/quote state lives
- * in SourcingContext; all UI lives in components.
- */
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useShop } from "@/context/ShopContext";
-import { SourcingProvider } from "@/context/SourcingContext";
-import { AppHeader } from "@/components/AppHeader";
-import { DemoBanner } from "@/components/DemoBanner";
-import { SourcingPanel } from "@/components/sourcing/SourcingPanel";
-import { MobileQuoteBar, QuoteCart } from "@/components/quote/QuoteCart";
-
-export default function Home() {
-  const router = useRouter();
-  const { profile, isLoaded } = useShop();
-
-  useEffect(() => {
-    if (isLoaded && !profile) {
-      router.replace("/login");
-    }
-  }, [isLoaded, profile, router]);
-
-  if (!isLoaded || !profile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
-        Loading…
-      </div>
-    );
-  }
-
+export default function HomePage() {
   return (
-    <SourcingProvider>
-      <div className="min-h-screen flex flex-col">
-        <DemoBanner />
-        <AppHeader />
-
-        <div className="flex-1 flex justify-center">
-          <div className="flex w-full max-w-[1200px] px-4 sm:px-6 py-6 gap-6">
-            <SourcingPanel />
-            <QuoteCart />
-          </div>
-        </div>
-
-        <MobileQuoteBar />
+    <main className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md text-center px-6">
+        <h1 className="text-2xl font-semibold text-gray-800 mb-3">
+          Conneverse — MVP
+        </h1>
+        <p className="text-sm text-gray-600 mb-6">
+          Backend is up. Frontend UI is being rebuilt.
+        </p>
+        <p className="text-xs text-gray-400">
+          Try:{" "}
+          <code className="px-2 py-1 bg-gray-100 rounded">
+            POST /api/search
+          </code>
+        </p>
       </div>
-    </SourcingProvider>
+    </main>
   );
 }

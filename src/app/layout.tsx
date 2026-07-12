@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ShopProvider } from "@/context/ShopContext";
 
 export const metadata: Metadata = {
   title: "Conneverse — Trusted Parts Agent",
@@ -16,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-[#F7F8FA] text-[#1A1A2E]">
-        <ShopProvider>{children}</ShopProvider>
+        {children}
       </body>
     </html>
   );
