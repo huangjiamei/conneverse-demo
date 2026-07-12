@@ -1,13 +1,190 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Conneverse database schema
+// Single-file layout, 详见 model 之间的分区注释
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  SHOP · REPAIR ORDER · PART LINE
+//  CCC 数据的落地形态。RepairOrder 一份对应一辆车 + 一组 PartLine。
+// ═══════════════════════════════════════════════════════════════
+
+// 店铺
+model Shop {
+  id            String        @id @default(cuid())
+  name          String        @unique   // "M WORK AUTO BODY KENNY RD"
+  createdAt     DateTime      @default(now())
+
+  repairOrders  RepairOrder[]
+}
+
+// 维修工单(一份 RO,对应一辆车)
+model RepairOrder {
+  id            String       @id @default(cuid())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // 来源
+  shopId        String
+  shop          Shop         @relation(fields: [shopId], references: [id])
+  cccRoNumber   String       // "2503006" — CCC 那边的 RO 号
+
+  // 车辆信息:CCC 原始 + 当前值(用户可能改过)
+  vehicleYear   Int
+  vehicleMake   String       // 展开后的全名 "Tesla"、"Honda"(用于 matcher)
+  vehicleModel  String       // "Model X"、"Civic Sedan"
+  vehicleRaw    String       // "2018 TESL Model X 75D AWD" — CCC 原文
+
+  partLines     PartLine[]
+
+  @@unique([shopId, cccRoNumber])   // 同一店同一 RO 不重复导入
+  @@index([createdAt])
+}
+
+// 一条零件行
+model PartLine {
+  id                  String        @id @default(cuid())
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  repairOrderId       String
+  repairOrder         RepairOrder   @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+
+  // CCC 原始数据
+  cccLineNumber       Int           // CCC 里的 Line 号 (5, 70, 79...)
+  partTypeRaw         String        // "OEM"
+  partDescriptionRaw  String        // CCC 原始描述
+  partNumberRaw       String?       // CCC 原始号
+
+  // 当前值(用于 matcher,用户可以改)
+  partDescription     String        // 初始 = partDescriptionRaw
+  partNumber          String?       // 初始 = partNumberRaw
+  quantity            Int           @default(1)
+
+  // 关系
+  historicalPurchase  HistoricalPurchase?  // CCC 里"这家店过去实际怎么买的"
+  matchSearches       MatchSearch[]        // 用户点查询后的每一次 matcher 调用
+  purchaseOrders      PurchaseOrder[]      // 用户在我们系统里下的采购单
+
+  @@unique([repairOrderId, cccLineNumber])
+  @@index([repairOrderId])
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  HISTORICAL PURCHASE
+//  店铺过去怎么买的,来自 CCC。用于以后的 savings baseline 计算,
+//  不参与 matcher 调用。
+// ═══════════════════════════════════════════════════════════════
+
+model HistoricalPurchase {
+  id                  String     @id @default(cuid())
+  partLineId          String     @unique
+  partLine            PartLine   @relation(fields: [partLineId], references: [id], onDelete: Cascade)
+
+  vendorName          String?    // "eBay" / "Lindsay Honda"
+  discountPercent     Decimal?   @db.Decimal(5, 4)
+  orderedDate         DateTime?
+  expectedDelivery    DateTime?
+  invoiceDate         DateTime?
+  creditDate          DateTime?
+  extendedSales       Decimal?   @db.Decimal(10, 2)  // 客户被收
+  actualCost          Decimal?   @db.Decimal(10, 2)  // 店实际付
+  remarks             String?
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  MATCHER RESULTS
+//  一条 PartLine 每被查询一次,新建一条 MatchSearch。
+//  Candidate 是 matcher 返回的每一条候选(每次搜索大约 10 条)。
+// ═══════════════════════════════════════════════════════════════
+
+// 一次 matcher 调用的完整结果
+model MatchSearch {
+  id                    String       @id @default(cuid())
+  createdAt             DateTime     @default(now())
+
+  partLineId            String
+  partLine              PartLine     @relation(fields: [partLineId], references: [id], onDelete: Cascade)
+
+  // 搜索时用的输入快照(可能跟 partLine 当前值不一样,如果用户之后又改了)
+  queryVehicleYear      Int
+  queryVehicleMake      String
+  queryVehicleModel     String
+  queryPartDescription  String
+  queryPartNumber       String?
+
+  // matcher 返回的摘要(方便列表查询,不用每次解 JSON)
+  matcherLabel          Int?         // 0 / 1 / null
+  labelSource           String?      // 'EXACT_MPN_MATCH' 等
+  candidateCount        Int          @default(0)
+
+  // 完整 matcher 响应(复盘/重跑/调试用)
+  rawResponse           Json
+
+  candidates            Candidate[]
+
+  @@index([partLineId, createdAt])
+}
+
+// matcher 返回的每一条候选
+model Candidate {
+  id              String         @id @default(cuid())
+  matchSearchId   String
+  matchSearch     MatchSearch    @relation(fields: [matchSearchId], references: [id], onDelete: Cascade)
+
+  rank            Int            // 在返回列表里的位置 (1..N)
+  ebayItemId      String
+  title           String
+  price           Decimal        @db.Decimal(10, 2)
+  currency        String         @default("USD")
+  itemUrl         String
+  imageUrl        String?
+  condition       String?
+
+  candidateLabel  Int?           // matcher 打的标 (0 / 1 / null)
+  labelSource     String?        // 'EXACT_MPN_MATCH' / 'NGRAM_FITMENT_REJECT' 等
+
+  purchaseOrder   PurchaseOrder? // 如果用户挑了它下单
+
+  @@index([matchSearchId, rank])
+  @@index([ebayItemId])
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  USER ACTIONS
+//  用户在我们系统里做的操作(下单等)。
+// ═══════════════════════════════════════════════════════════════
+
+// 用户下的采购单
+model PurchaseOrder {
+  id            String       @id @default(cuid())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  partLineId    String
+  partLine      PartLine     @relation(fields: [partLineId], references: [id])
+
+  candidateId   String       @unique
+  candidate     Candidate    @relation(fields: [candidateId], references: [id])
+
+  // 下单时快照(卖家之后改价/下架不影响,会计意义上必须)
+  ebayItemId    String
+  title         String
+  price         Decimal      @db.Decimal(10, 2)
+  currency      String       @default("USD")
+  quantity      Int          @default(1)
+
+  // 状态机(先简单,以后扩展)
+  status        String       @default("placed")  // placed | ordered | delivered | cancelled
+
+  @@index([partLineId])
 }
