@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import UploadRoButton from "./UploadRoButton";
 
 export default async function HomePage() {
   const repairOrders = await prisma.repairOrder.findMany({
@@ -17,12 +18,15 @@ export default async function HomePage() {
 
   return (
     <main className="max-w-4xl mx-auto p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Repair Orders</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {repairOrders.length} orders imported from CCC
-        </p>
-      </div>
+     <div className="mb-6 flex flex-row items-start justify-between">
+  <div className="flex flex-col">
+    <h1 className="text-2xl font-semibold">Repair Orders</h1>
+    <p className="text-sm text-gray-500 mt-1">
+      {repairOrders.length} orders imported from CCC
+    </p>
+  </div>
+  <UploadRoButton />
+</div>
 
       {repairOrders.length === 0 ? (
         <p className="text-gray-500">No repair orders yet.</p>
