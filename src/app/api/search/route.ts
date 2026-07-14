@@ -141,7 +141,7 @@ export async function POST(req: Request) {
       candidateCount: candidates.length,
       rawResponse: matcherData as object,
       candidates: {
-        create: candidates.map((c, idx) => ({
+        create: candidates.map((c: MatcherCandidate, idx: number) => ({
           rank: idx + 1,
           ebayItemId: c.item_id ?? "",
           title: c.title ?? "",
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
     label: matcherData.label,
     labelSource: matcherData.label_source,
     candidateCount: candidates.length,
-    candidates: matchSearch.candidates.map((c) => ({
+    candidates: matchSearch.candidates.map((c:any) => ({
       id: c.id,
       rank: c.rank,
       title: c.title,
