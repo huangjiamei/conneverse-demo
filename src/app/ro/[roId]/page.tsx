@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import DeletePartLineButton from "./DeletePartLineButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function RoDetailPage({
   params,
 }: {

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import UploadRoButton from "./UploadRoButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const repairOrders = await prisma.repairOrder.findMany({
     include: {
