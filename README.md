@@ -128,3 +128,6 @@ documented in [`docs/embed.md`](docs/embed.md).
 Pushes to `main` auto-deploy to Vercel. Set `EBAY_CLIENT_ID`,
 `EBAY_CLIENT_SECRET`, and `ANTHROPIC_API_KEY` as Vercel environment
 variables to enable live sourcing in production.
+
+### Prisma
+DATABASE_URL= "PROD_URL" npx prisma migrate deploy
