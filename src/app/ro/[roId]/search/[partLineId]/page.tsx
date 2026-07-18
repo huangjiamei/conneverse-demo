@@ -74,6 +74,11 @@ export default async function SearchPage({
                   candidateLabel: c.candidateLabel,
                   labelSource: c.labelSource,
                   ebayItemId: c.ebayItemId,
+                  optimizerRank: c.optimizerRank,
+                  optimizerTotal: c.optimizerTotal,
+                  optimizerPriceScore: c.optimizerPriceScore,
+                  optimizerQualityScore: c.optimizerQualityScor,
+                  optimizerGateReason: c.optimizerGateReason,
                 })),
               }
             : null
