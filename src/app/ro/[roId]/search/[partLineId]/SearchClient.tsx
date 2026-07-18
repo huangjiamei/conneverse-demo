@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Search, Pencil, X, Check, ExternalLink } from "lucide-react";
+import { Loader2, Search, Pencil, X, Check, ExternalLink, Award } from "lucide-react";
 
 type Candidate = {
   id: string;
@@ -14,6 +14,12 @@ type Candidate = {
   candidateLabel: number | null;
   labelSource: string | null;
   ebayItemId: string;
+  // ---- optimizer ----
+  optimizerRank: number | null;
+  optimizerTotal: number | null;
+  optimizerPriceScore: number | null;
+  optimizerQualityScore: number | null;
+  optimizerGateReason: string | null;
 };
 
 type SearchResult = {
@@ -23,6 +29,11 @@ type SearchResult = {
   labelSource: string | null;
   candidateCount: number;
   candidates: Candidate[];
+  optimizerMeta?: {
+    preset: string | null;
+    eligibleCount: number;
+    rejectedCount: number;
+  };
 };
 
 type Props = {
@@ -88,6 +99,7 @@ export default function SearchClient({
         labelSource: data.labelSource ?? null,
         candidateCount: data.candidateCount ?? 0,
         candidates: data.candidates ?? [],
+        optimizerMeta: data.optimizerMeta,
       });
       setIsEditing(false);
     } catch (e) {
@@ -210,6 +222,12 @@ export default function SearchClient({
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
               Candidates ({result.candidateCount})
+              {result.optimizerMeta && result.optimizerMeta.eligibleCount > 0 && (
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case tracking-normal">
+                  · {result.optimizerMeta.eligibleCount} ranked by{" "}
+                  {result.optimizerMeta.preset}
+                </span>
+              )}
             </h2>
             <span className="text-xs text-gray-400">
               Searched {new Date(result.createdAt).toLocaleString()}
@@ -235,11 +253,16 @@ export default function SearchClient({
 
 function CandidateCard({ candidate }: { candidate: Candidate }) {
   const isVerifiedMatch = candidate.candidateLabel === 1;
+  const isTopPick = candidate.optimizerRank === 1;
+  const isRanked = candidate.optimizerRank != null;
+  const isGated = candidate.optimizerGateReason != null;
 
   return (
     <div
       className={`bg-white border rounded-lg p-4 transition ${
-        isVerifiedMatch
+        isTopPick
+          ? "border-teal-400 shadow-md ring-1 ring-teal-100"
+          : isVerifiedMatch
           ? "border-teal-200 shadow-sm"
           : "border-gray-200"
       }`}
@@ -247,9 +270,16 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[11px] text-gray-400">
-              #{candidate.rank}
-            </span>
+            {isRanked ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#1A1A2E] text-white">
+                {isTopPick && <Award size={10} />}
+                Rank {candidate.optimizerRank}
+              </span>
+            ) : (
+              <span className="font-mono text-[11px] text-gray-400">
+                #{candidate.rank}
+              </span>
+            )}
             {isVerifiedMatch && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-50 text-teal-700">
                 <Check size={10} />
@@ -261,6 +291,14 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
                 Uncertain
               </span>
             )}
+            {isGated && (
+              <span
+                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700"
+                title={`Filtered out: ${candidate.optimizerGateReason}`}
+              >
+                Filtered
+              </span>
+            )}
             {candidate.condition && (
               <span className="text-[11px] text-gray-500">
                 {candidate.condition}
@@ -270,15 +308,24 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
           <div className="mt-1 text-sm text-[#1A1A2E] leading-snug">
             {candidate.title}
           </div>
-          <a
-          
-            href={candidate.itemUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-[#00B4A6] transition"
-          >
-            View on eBay <ExternalLink size={10} />
-          </a>
+          <div className="mt-1 flex items-center gap-3">
+            <a
+              href={candidate.itemUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-[#00B4A6] transition"
+            >
+              View on eBay <ExternalLink size={10} />
+            </a>
+            {isRanked && candidate.optimizerTotal != null && (
+              <span
+                className="text-[10px] text-gray-400"
+                title={`price: ${candidate.optimizerPriceScore?.toFixed(0)} | quality: ${candidate.optimizerQualityScore?.toFixed(0)}`}
+              >
+                Score {candidate.optimizerTotal.toFixed(0)}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex-shrink-0 text-right">

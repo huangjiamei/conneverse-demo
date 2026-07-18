@@ -154,8 +154,15 @@ model Candidate {
 
   purchaseOrder   PurchaseOrder? // 如果用户挑了它下单
 
+  optimizerRank         Int?
+  optimizerTotal        Float?
+  optimizerPriceScore   Float?
+  optimizerQualityScore Float?
+  optimizerGateReason   String?
+
   @@index([matchSearchId, rank])
   @@index([ebayItemId])
+  @@index([matchSearchId, optimizerRank])
 }
 
 
