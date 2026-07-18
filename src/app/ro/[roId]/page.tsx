@@ -23,6 +23,12 @@ export default async function RoDetailPage({
           matchSearches: {
             orderBy: { createdAt: "desc" },
             take: 1,
+            include: {
+              candidates: {
+                where: { candidateLabel: 1 },
+                select: { id: true },
+              },
+            },
           },
           purchaseOrders: {
             take: 1,
@@ -142,9 +148,14 @@ export default async function RoDetailPage({
                       </span>
                     )}
                     {hasSearched && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-teal-50 text-teal-700">
-                        {lastSearch.candidateCount} results
-                      </span>
+                      <>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-teal-50 text-teal-700">
+                          {lastSearch.candidates.length} verified
+                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
+                          {lastSearch.candidateCount} total
+                        </span>
+                      </>
                     )}
                     <span className="text-xs text-gray-400 group-hover:text-[#00B4A6] transition mt-1">
                       {hasSearched ? "View →" : "Search →"}

@@ -77,9 +77,21 @@ export default async function SearchPage({
       </Link>
 
       <div className="mt-4 bg-[#1A1A2E] text-white rounded-xl p-6">
-        <div className="text-xs text-white/50 tracking-wide">Searching for</div>
-        <div className="mt-1 text-xl font-semibold">
-          {ro.vehicleYear} {ro.vehicleMake} {ro.vehicleModel}
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <div className="text-xs text-white/50 tracking-wide">
+              Searching for
+            </div>
+            <div className="mt-1 text-xl font-semibold">
+              {ro.vehicleYear} {ro.vehicleMake} {ro.vehicleModel}
+            </div>
+          </div>
+          <Link
+            href={`/ro/${roId}/search/${partLineId}/debug`}
+            className="text-xs text-white/50 hover:text-white/80 transition inline-flex items-center gap-1"
+          >
+            Debug view →
+          </Link>
         </div>
       </div>
 
@@ -89,6 +101,7 @@ export default async function SearchPage({
         initialPartDescriptionRaw={partLine.partDescriptionRaw}
         initialPartNumber={partLine.partNumber}
         initialPartNumberRaw={partLine.partNumberRaw}
+        initialSelectedPreset={partLine.selectedPreset || "sameDayJob"}
         partType={partLine.partTypeRaw}
         cccLineNumber={partLine.cccLineNumber}
         historicalPurchase={

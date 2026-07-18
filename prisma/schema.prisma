@@ -67,6 +67,9 @@ model PartLine {
   partNumber          String?       // 初始 = partNumberRaw
   quantity            Int           @default(1)
 
+  //用户偏好
+  selectedPreset      String        @default("sameDayJob")
+
   // 关系
   historicalPurchase  HistoricalPurchase?  // CCC 里"这家店过去实际怎么买的"
   matchSearches       MatchSearch[]        // 用户点查询后的每一次 matcher 调用
@@ -130,6 +133,7 @@ model MatchSearch {
   rawResponse           Json
 
   candidates            Candidate[]
+  optimizerResults OptimizerResult[]
 
   @@index([partLineId, createdAt])
 }
@@ -153,6 +157,7 @@ model Candidate {
   labelSource     String?        // 'EXACT_MPN_MATCH' / 'NGRAM_FITMENT_REJECT' 等
 
   purchaseOrder   PurchaseOrder? // 如果用户挑了它下单
+  optimizerResults  OptimizerResult[]
 
   optimizerRank         Int?
   optimizerTotal        Float?
@@ -194,4 +199,28 @@ model PurchaseOrder {
   status        String       @default("placed")  // placed | ordered | delivered | cancelled
 
   @@index([partLineId])
+}
+
+// 每个 candidate × 每个 preset 的 optimizer 结果缓存
+// 用户切 preset 时先查这里, 命中就不用调 matcher rerank
+model OptimizerResult {
+  id           String     @id @default(cuid())
+  candidateId  String
+  candidate    Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  preset       String     // "sameDayJob" 等
+
+  matchSearchId String                          // 冗余存, 加速查询
+  matchSearch   MatchSearch  @relation(fields: [matchSearchId], references: [id], onDelete: Cascade)
+
+  rank          Int?
+  total         Float?
+  priceScore    Float?
+  qualityScore  Float?
+  gateReason    String?
+
+  createdAt     DateTime   @default(now())
+
+  @@unique([candidateId, preset])
+  @@index([matchSearchId, preset]) 
+  @@index([candidateId])
 }

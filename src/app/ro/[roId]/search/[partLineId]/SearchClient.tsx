@@ -1,23 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import {
-  Loader2,
-  Search,
-  Pencil,
-  X,
-  Check,
-  ExternalLink,
-  Award,
-  ChevronDown,
-  ChevronUp,
-  Truck,
-  Star,
-  Shield,
-  RotateCcw,
-  Package,
+  Loader2, Search, Pencil, X, Check, ExternalLink, Award,
+  ChevronDown, ChevronUp, Truck, Star, Shield, RotateCcw, Package,
 } from "lucide-react";
+import Image from "next/image";
+
+// ============================================================
+// Types
+// ============================================================
 
 type EnrichedFields = {
   seller_username?: string | null;
@@ -43,6 +35,7 @@ type Candidate = {
   price: string;
   currency: string;
   itemUrl: string;
+  imageUrl: string | null;
   condition: string | null;
   candidateLabel: number | null;
   labelSource: string | null;
@@ -55,7 +48,6 @@ type Candidate = {
   brand: string | null;
   enrichedFields: EnrichedFields | null;
   compatibility: Record<string, unknown> | null;
-  imageUrl: string | null;
   additionalImageUrls: string[];
 };
 
@@ -85,12 +77,41 @@ type Props = {
     actualCost: string | null;
     vendorName: string | null;
   } | null;
+  initialSelectedPreset: string;
   latestSearch: SearchResult | null;
 };
 
 // ============================================================
-// 辅助: 从 delivery ISO 时间戳算到今天的天数
+// Preset metadata (显示用)
 // ============================================================
+
+const PRESETS = [
+  {
+    key: "sameDayJob",
+    label: "Same-day job",
+    description: "Need it today, strict on seller & US only",
+  },
+  {
+    key: "costFirst",
+    label: "Cost first",
+    description: "Cheapest wins, seller looser",
+  },
+  {
+    key: "qualityFirst",
+    label: "Quality first",
+    description: "Highest-rated sellers, big brands",
+  },
+  {
+    key: "scheduled",
+    label: "Scheduled",
+    description: "Not urgent, allow backorder & overseas",
+  },
+] as const;
+
+// ============================================================
+// Helpers
+// ============================================================
+
 function daysFromNow(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -100,10 +121,7 @@ function daysFromNow(iso: string | null | undefined): number | null {
   return Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
 }
 
-function formatDeliveryRange(
-  min: string | null | undefined,
-  max: string | null | undefined,
-): string | null {
+function formatDeliveryRange(min: string | null | undefined, max: string | null | undefined): string | null {
   const mn = daysFromNow(min);
   const mx = daysFromNow(max);
   if (mn == null && mx == null) return null;
@@ -123,8 +141,9 @@ function formatWarranty(raw: string | null | undefined): string | null {
 }
 
 // ============================================================
-// 主组件
+// Main component
 // ============================================================
+
 export default function SearchClient({
   partLineId,
   initialPartDescription,
@@ -134,6 +153,7 @@ export default function SearchClient({
   partType,
   cccLineNumber,
   historicalPurchase,
+  initialSelectedPreset,
   latestSearch,
 }: Props) {
   const [description, setDescription] = useState(initialPartDescription);
@@ -143,6 +163,8 @@ export default function SearchClient({
   const [result, setResult] = useState<SearchResult | null>(latestSearch);
   const [error, setError] = useState<string | null>(null);
   const [showFiltered, setShowFiltered] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState(initialSelectedPreset);
+  const [switchingPreset, setSwitchingPreset] = useState<string | null>(null);
 
   const hasUnsavedEdit =
     description !== initialPartDescription ||
@@ -185,11 +207,62 @@ export default function SearchClient({
         candidates: data.candidates ?? [],
         optimizerMeta: data.optimizerMeta,
       });
+      if (data.preset) setSelectedPreset(data.preset);
       setIsEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function handlePresetSwitch(newPreset: string) {
+    if (newPreset === selectedPreset) return;
+    setError(null);
+
+    // 无论有没有搜索过, 先把偏好写库
+    // 有搜索: 通过 switch-preset (它内部会更新 partLine)
+    // 无搜索: 直接 PATCH partLine (轻量)
+    if (!result) {
+      setSelectedPreset(newPreset);   // optimistic
+      try {
+        const patch = await fetch(`/api/part-lines/${partLineId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ selectedPreset: newPreset }),
+        });
+        if (!patch.ok) throw new Error("Failed to save preset");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to save preset");
+        setSelectedPreset(selectedPreset);   // rollback
+      }
+      return;
+    }
+
+    // 有搜索结果: 调 switch-preset 拿新排序 + 更新 partLine
+    setSwitchingPreset(newPreset);
+    try {
+      const res = await fetch(`/api/switch-preset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchSearchId: result.id, preset: newPreset }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `Switch failed: HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setResult({
+        ...result,
+        candidateCount: data.candidateCount,
+        candidates: data.candidates,
+        optimizerMeta: data.optimizerMeta,
+      });
+      setSelectedPreset(newPreset);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Switch failed");
+    } finally {
+      setSwitchingPreset(null);
     }
   }
 
@@ -199,9 +272,7 @@ export default function SearchClient({
     setIsEditing(false);
   }
 
-  // 分组: label=1 是主要展示, 其他 (label=0 / null) 折叠
-  const verified =
-    result?.candidates.filter((c) => c.candidateLabel === 1) ?? [];
+  const verified = result?.candidates.filter((c) => c.candidateLabel === 1) ?? [];
   const others = result?.candidates.filter((c) => c.candidateLabel !== 1) ?? [];
 
   return (
@@ -239,9 +310,7 @@ export default function SearchClient({
               <>
                 <div className="mt-0.5 text-[#1A1A2E]">
                   {description || (
-                    <span className="text-gray-400 italic text-sm">
-                      (no description)
-                    </span>
+                    <span className="text-gray-400 italic text-sm">(no description)</span>
                   )}
                 </div>
                 {initialPartDescriptionRaw &&
@@ -269,9 +338,7 @@ export default function SearchClient({
               <>
                 <div className="mt-0.5 text-[#1A1A2E] font-mono text-sm">
                   {partNumber || (
-                    <span className="text-gray-400 italic font-sans">
-                      (none)
-                    </span>
+                    <span className="text-gray-400 italic font-sans">(none)</span>
                   )}
                 </div>
                 {initialPartNumberRaw &&
@@ -313,6 +380,36 @@ export default function SearchClient({
               Cancel
             </button>
           )}
+
+          {/* Preset 胶囊标签 */}
+  <div className="flex items-center gap-3 ml-auto">
+    {PRESETS.map((p) => {
+      const isSelected = selectedPreset === p.key;
+      const isLoading = switchingPreset === p.key;
+      // 短标签 (胶囊上显示)
+      const shortLabel =
+        p.key === "sameDayJob" ? "Same-day"
+        : p.key === "costFirst" ? "Cost"
+        : p.key === "qualityFirst" ? "Quality"
+        : "Schedule";
+      return (
+        <button
+          key={p.key}
+          onClick={() => handlePresetSwitch(p.key)}
+          disabled={searching || switchingPreset != null}
+          title={`${p.label} — ${p.description}`}
+          className={`inline-flex items-center gap-1 px-4 py-2 rounded-full border text-sm font-medium transition ${
+            isSelected
+              ? "border-[#00B4A6] bg-teal-50 text-[#00B4A6]"
+              : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+          } disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {isLoading && <Loader2 size={14} className="animate-spin" />}
+          {shortLabel}
+        </button>
+      );
+    })}
+  </div>
         </div>
 
         {error && (
@@ -325,7 +422,6 @@ export default function SearchClient({
       {/* 结果区 */}
       {result && !searching && (
         <div className="mt-6">
-          {/* Baseline 横条 (跟历史采购价对比) */}
           {historicalPurchase?.actualCost && (
             <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
               Baseline: historically paid{" "}
@@ -341,15 +437,14 @@ export default function SearchClient({
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
               Verified candidates ({verified.length})
-              {result.optimizerMeta &&
-                result.optimizerMeta.eligibleCount > 0 && (
-                  <span className="ml-2 text-xs font-normal text-gray-400 normal-case tracking-normal">
-                    · ranked by {result.optimizerMeta.preset}
-                  </span>
-                )}
+              {result.optimizerMeta && result.optimizerMeta.eligibleCount > 0 && (
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case tracking-normal">
+                  · ranked by {result.optimizerMeta.preset}
+                </span>
+              )}
             </h2>
             <span className="text-xs text-gray-400">
-              Searched {new Date(result.createdAt).toLocaleString()}
+              Searched {new Date(result.createdAt).toLocaleString("en-US")}
             </span>
           </div>
 
@@ -365,7 +460,6 @@ export default function SearchClient({
             </div>
           )}
 
-          {/* 折叠区: 其他候选 */}
           {others.length > 0 && (
             <div className="mt-6">
               <button
@@ -374,15 +468,9 @@ export default function SearchClient({
               >
                 <span>
                   {others.length} additional candidates filtered by matcher
-                  <span className="text-gray-400 ml-1">
-                    (uncertain / rejected)
-                  </span>
+                  <span className="text-gray-400 ml-1">(uncertain / rejected)</span>
                 </span>
-                {showFiltered ? (
-                  <ChevronUp size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
+                {showFiltered ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
               {showFiltered && (
                 <div className="mt-2 space-y-2">
@@ -400,8 +488,9 @@ export default function SearchClient({
 }
 
 // ============================================================
-// 候选卡片: 默认收起 seller/shipping/warranty, 点开展开
+// Candidate card (跟之前基本一样)
 // ============================================================
+
 function CandidateCard({ candidate }: { candidate: Candidate }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -415,13 +504,10 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
     typeof ef.seller_feedback_pct === "number"
       ? ef.seller_feedback_pct
       : ef.seller_feedback_pct
-        ? Number(ef.seller_feedback_pct)
-        : null;
+      ? Number(ef.seller_feedback_pct)
+      : null;
   const sellerCount = ef.seller_feedback_count ?? null;
-  const delivery = formatDeliveryRange(
-    ef.delivery_min_date,
-    ef.delivery_max_date,
-  );
+  const delivery = formatDeliveryRange(ef.delivery_min_date, ef.delivery_max_date);
   const warranty = formatWarranty(ef.warranty_raw);
   const country = ef.country ?? null;
 
@@ -431,14 +517,12 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
         isTopPick
           ? "border-teal-400 shadow-md ring-1 ring-teal-100"
           : isVerifiedMatch
-            ? "border-teal-200 shadow-sm"
-            : "border-gray-200"
+          ? "border-teal-200 shadow-sm"
+          : "border-gray-200"
       }`}
     >
-      {/* 主要信息 */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-4">
-          {/* 主图缩略图 */}
           {candidate.imageUrl && (
             <a
               href={candidate.itemUrl}
@@ -450,49 +534,48 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               <Image
                 src={candidate.imageUrl}
                 alt={candidate.title}
-                width={80}
-                height={80}
+                width={60}
+                height={60}
                 className="w-[60px] h-[60px] object-cover rounded border border-gray-100"
               />
             </a>
           )}
+
           <div className="min-w-0 flex-1">
-            {/* Badge 行 */}
             <div className="flex items-center gap-2 flex-wrap">
-              {isRanked ? (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#1A1A2E] text-white">
-                  {isTopPick && <Award size={10} />}
-                  Rank {candidate.optimizerRank}
-                </span>
-              ) : (
-                <span className="font-mono text-[11px] text-gray-400">
-                  #{candidate.rank}
-                </span>
-              )}
-              {isVerifiedMatch && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-50 text-teal-700">
-                  <Check size={10} />
-                  Verified
-                </span>
-              )}
-              {candidate.candidateLabel === 0 && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
-                  Uncertain
-                </span>
-              )}
-              {isGated && (
-                <span
-                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700"
-                  title={`Filtered out: ${candidate.optimizerGateReason}`}
-                >
-                  Filtered
-                </span>
-              )}
-              {candidate.condition && (
-                <span className="text-[11px] text-gray-500">
-                  {candidate.condition}
-                </span>
-              )}
+               {/* 1. Fitment 标签: Verified / Uncertain / Rejected */}
+  {isVerifiedMatch && (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-50 text-teal-700">
+      <Check size={10} />
+      Verified
+    </span>
+  )}
+  {candidate.candidateLabel === 0 && (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+      Rejected
+    </span>
+  )}
+  {candidate.candidateLabel === null && (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+      Uncertain
+    </span>
+  )}
+              {/* 2. Verified 后接 Rank badge */}
+  {isVerifiedMatch && isRanked && (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#1A1A2E] text-white">
+      {isTopPick && <Award size={10} />}
+      Rank {candidate.optimizerRank}
+    </span>
+  )}
+
+  {/* 4. Verified 后接 Filter reason (被 gate 拒的情况) */}
+  {isVerifiedMatch && isGated && (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
+      Filter reason: {candidate.optimizerGateReason}
+    </span>
+  )}
+              
+              
               {ef.top_rated && (
                 <span
                   className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-50 text-yellow-700"
@@ -504,7 +587,6 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               )}
             </div>
 
-            {/* 品牌 + 标题 */}
             {candidate.brand && (
               <div className="mt-1 text-xs font-medium text-gray-600">
                 {candidate.brand}
@@ -514,8 +596,10 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               {candidate.title}
             </div>
 
-            {/* 关键信号一行: 卖家 + 交付 + 保修 + 发货地 */}
             <div className="mt-2 flex items-center gap-3 flex-wrap text-[11px] text-gray-500">
+            {candidate.condition && (
+    <span>{candidate.condition}</span>
+  )}
               {sellerPct != null && sellerCount != null && (
                 <span title={`Seller ${ef.seller_username ?? ""}`}>
                   ✓ {sellerPct.toFixed(1)}% · {sellerCount.toLocaleString()}
@@ -528,10 +612,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
                 </span>
               )}
               {warranty && (
-                <span
-                  className="inline-flex items-center gap-0.5"
-                  title="Warranty"
-                >
+                <span className="inline-flex items-center gap-0.5" title="Warranty">
                   <Shield size={11} />
                   {warranty}
                 </span>
@@ -546,7 +627,6 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               )}
             </div>
 
-            {/* View on eBay + Score */}
             <div className="mt-2 flex items-center gap-3">
               <a
                 href={candidate.itemUrl}
@@ -596,29 +676,25 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
         </div>
       </div>
 
-      {/* 展开区 */}
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-600 space-y-2">
-          {/* 兼容车型 (compatibility) */}
-          {candidate.compatibility &&
-            Object.keys(candidate.compatibility).length > 0 && (
-              <div>
-                <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-                  Compatibility
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                  {Object.entries(candidate.compatibility)
-                    .filter(([k]) => k !== "categoryPath")
-                    .map(([k, v]) => (
-                      <div key={k}>
-                        <span className="text-gray-400">{k}:</span> {String(v)}
-                      </div>
-                    ))}
-                </div>
+          {candidate.compatibility && Object.keys(candidate.compatibility).length > 0 && (
+            <div>
+              <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
+                Compatibility
               </div>
-            )}
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                {Object.entries(candidate.compatibility)
+                  .filter(([k]) => k !== "categoryPath")
+                  .map(([k, v]) => (
+                    <div key={k}>
+                      <span className="text-gray-400">{k}:</span> {String(v)}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
-          {/* 卖家详情 */}
           {ef.seller_username && (
             <div>
               <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
@@ -627,13 +703,11 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               <div>
                 {ef.seller_username}
                 {sellerPct != null && ` · ${sellerPct.toFixed(1)}% positive`}
-                {sellerCount != null &&
-                  ` (${sellerCount.toLocaleString()} feedback)`}
+                {sellerCount != null && ` (${sellerCount.toLocaleString()} feedback)`}
               </div>
             </div>
           )}
 
-          {/* 退货 + 销量 + 库存 */}
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {ef.returns_accepted != null && (
               <div className="inline-flex items-center gap-1">
@@ -650,7 +724,9 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
                 {ef.sold_qty.toLocaleString()} sold
               </div>
             )}
-            {ef.available_qty != null && <div>Stock: {ef.available_qty}</div>}
+            {ef.available_qty != null && (
+              <div>Stock: {ef.available_qty}</div>
+            )}
             {ef.shipping_cost != null && Number(ef.shipping_cost) > 0 && (
               <div>Shipping: ${Number(ef.shipping_cost).toFixed(2)}</div>
             )}
@@ -683,12 +759,6 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
             </div>
           )}
 
-          {/* 若被 gate 拒, 显示原因 */}
-          {isGated && (
-            <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              Filter reason: {candidate.optimizerGateReason}
-            </div>
-          )}
         </div>
       )}
     </div>

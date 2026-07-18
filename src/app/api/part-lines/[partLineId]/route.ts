@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 type Body = {
   partDescription?: string;
   partNumber?: string | null;
+  selectedPreset?: string;
 };
 
 export async function PATCH(
@@ -20,7 +21,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const data: { partDescription?: string; partNumber?: string | null } = {};
+  const data: { 
+    partDescription?: string;
+    partNumber?: string | null; 
+    selectedPreset?: string; 
+  } = {};
+  const VALID_PRESETS = ["sameDayJob", "costFirst", "qualityFirst", "scheduled"];
+
   if (typeof body.partDescription === "string") {
     data.partDescription = body.partDescription;
   }
@@ -30,6 +37,16 @@ export async function PATCH(
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+  }
+
+  if (typeof body.selectedPreset === "string") {
+    if (!VALID_PRESETS.includes(body.selectedPreset)) {
+      return NextResponse.json(
+        { error: `Invalid preset: ${body.selectedPreset}` },
+        { status: 400 }
+      );
+    }
+    data.selectedPreset = body.selectedPreset;
   }
 
   try {
