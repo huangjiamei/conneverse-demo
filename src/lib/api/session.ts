@@ -28,8 +28,5 @@ export function getSessionToken(req: NextRequest): string | null {
 /** Mint a fresh opaque session token. Demo-grade: derived from a
  * high-entropy seed. Production would sign this. */
 export function issueSessionToken(seed: string): string {
-  return createHash("sha256")
-    .update(seed)
-    .digest("base64url")
-    .slice(0, 24);
+  return createHash("sha256").update(seed).digest("base64url").slice(0, 24);
 }

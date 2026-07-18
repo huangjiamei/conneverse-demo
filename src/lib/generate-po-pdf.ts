@@ -47,9 +47,14 @@ export function generatePurchaseOrderPDF(args: {
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...DARK);
-  doc.text(`PO ${order.id}${groupIndex ? ` · group ${groupIndex}` : ""}`, pageW - marginR, y + 8, {
-    align: "right",
-  });
+  doc.text(
+    `PO ${order.id}${groupIndex ? ` · group ${groupIndex}` : ""}`,
+    pageW - marginR,
+    y + 8,
+    {
+      align: "right",
+    },
+  );
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...GRAY);
@@ -57,13 +62,13 @@ export function generatePurchaseOrderPDF(args: {
     `Date: ${new Date(order.createdAt).toLocaleDateString("en-US")}`,
     pageW - marginR,
     y + 22,
-    { align: "right" }
+    { align: "right" },
   );
   doc.text(
     `ETA: ${new Date(order.etaDate).toLocaleDateString("en-US")}`,
     pageW - marginR,
     y + 34,
-    { align: "right" }
+    { align: "right" },
   );
 
   y += 48;
@@ -93,7 +98,7 @@ export function generatePurchaseOrderPDF(args: {
   doc.text(
     `Vehicle: ${order.vehicle.year} ${order.vehicle.make} ${order.vehicle.model}`,
     marginL,
-    y
+    y,
   );
   doc.text(shop.phone, marginL + contentW / 2, y);
   y += 22;
@@ -159,12 +164,12 @@ export function generatePurchaseOrderPDF(args: {
   doc.text(
     "All parts Conneverse-guaranteed: fitment verified, 30-day returns, delivery SLA.",
     marginL + 8,
-    y + 13
+    y + 13,
   );
   doc.text(
     "Delivery routed by Conneverse. Questions: support@conneverse.ai",
     marginL + 8,
-    y + 25
+    y + 25,
   );
 
   doc.save(`po-${order.id}.pdf`);

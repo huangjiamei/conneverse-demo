@@ -50,7 +50,7 @@ with no keys at all.
 ## Demo flow
 
 1. Pick a vehicle — try **2022 Toyota Camry** (or enter a VIN).
-2. Set **Job status**: *Car on lift* vs *Scheduled* — the one knob that
+2. Set **Job status**: _Car on lift_ vs _Scheduled_ — the one knob that
    re-ranks everything.
 3. Pick a category/part — try **Electrical → Alternator** to see the
    urgency flip: on-lift prioritizes the same-day pick, scheduled
@@ -96,16 +96,16 @@ Full standing context lives in [`AGENTS.md`](AGENTS.md).
 
 ## Surfaces
 
-| Route          | What it is                                             |
-| -------------- | ------------------------------------------------------ |
-| `/`            | Standalone shop app (sourcing + quote builder)         |
-| `/login`       | Shop onboarding (name, labor rate, zip)                |
-| `/orders`      | Orders board + part tracker + claims                   |
-| `/analytics`   | Savings ledger                                         |
-| `/ops`         | Internal console — photo curation, graduation, policy  |
-| `/embed`       | Embeddable panel for host integration                  |
-| `/embed-demo`  | Harness demonstrating the embed contract               |
-| `/hq`          | Team dashboard (timezones, bottlenecks, Notion sync)   |
+| Route         | What it is                                            |
+| ------------- | ----------------------------------------------------- |
+| `/`           | Standalone shop app (sourcing + quote builder)        |
+| `/login`      | Shop onboarding (name, labor rate, zip)               |
+| `/orders`     | Orders board + part tracker + claims                  |
+| `/analytics`  | Savings ledger                                        |
+| `/ops`        | Internal console — photo curation, graduation, policy |
+| `/embed`      | Embeddable panel for host integration                 |
+| `/embed-demo` | Harness demonstrating the embed contract              |
+| `/hq`         | Team dashboard (timezones, bottlenecks, Notion sync)  |
 
 The client-facing API (`/api/search`, `/api/optimize`,
 `/api/optimize-ro`, `/api/quotes`, `/api/orders`, …) is gated by a

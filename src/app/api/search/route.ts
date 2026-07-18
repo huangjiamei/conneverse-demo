@@ -7,7 +7,7 @@
  *   1. 用 Prisma 从 DB 读 PartLine + RepairOrder,组装 source_part_info
  *   2. 调 Python matcher 服务 (MATCHER_URL/api/match)
  *   3. 把返回结果 (含 optimizer_result) 存进 MatchSearch + Candidate(审计留档)
- *   4. 返回给前端可消费的 JSON, 按 optimizerRank 排序
+ *   4. 返回给前端可消费的 JSON, 按 optimizerRank 排序; enrichedFields 直接透传 (不落 Candidate 表)
  */
 
 import { NextResponse } from "next/server";
@@ -18,6 +18,24 @@ const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 type Body = {
   partLineId?: string;
   useLlm?: boolean;
+};
+
+// matcher 返回的 optimizer_fields 结构 (透传给前端展示用)
+type MatcherOptimizerFields = {
+  seller_username?: string | null;
+  seller_feedback_pct?: string | number | null;
+  seller_feedback_count?: number | null;
+  top_rated?: boolean | null;
+  availability_status?: string | null;
+  available_qty?: number | null;
+  sold_qty?: number | null;
+  shipping_cost?: string | number | null;
+  delivery_min_date?: string | null;
+  delivery_max_date?: string | null;
+  returns_accepted?: boolean | null;
+  return_period_days?: number | null;
+  warranty_raw?: string | null;
+  country?: string | null;
 };
 
 type MatcherCandidate = {
@@ -32,6 +50,9 @@ type MatcherCandidate = {
   price?: { value?: string; currency?: string } | null;
   candidate_label?: number | null;
   candidate_label_source?: string;
+  optimizer_fields?: MatcherOptimizerFields;
+  image_url?: string | null;
+  additional_image_urls?: string[];
 };
 
 type OptimizerEligible = {
@@ -75,7 +96,7 @@ export async function POST(req: Request) {
   if (!partLineId) {
     return NextResponse.json(
       { error: "Body must include { partLineId: string }" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -87,7 +108,7 @@ export async function POST(req: Request) {
   if (!partLine) {
     return NextResponse.json(
       { error: `PartLine not found: ${partLineId}` },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
@@ -119,8 +140,12 @@ export async function POST(req: Request) {
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: "Failed to reach matcher service", detail, matcherUrl: MATCHER_URL },
-      { status: 502 }
+      {
+        error: "Failed to reach matcher service",
+        detail,
+        matcherUrl: MATCHER_URL,
+      },
+      { status: 502 },
     );
   }
 
@@ -132,7 +157,7 @@ export async function POST(req: Request) {
         status: matcherRes.status,
         detail: errText.slice(0, 500),
       },
-      { status: 502 }
+      { status: 502 },
     );
   }
 
@@ -141,7 +166,7 @@ export async function POST(req: Request) {
   const candidates = matcherData.candidate_info_list ?? [];
   const optimizerResult = matcherData.optimizer_result;
 
-  // 建 optimizer lookup: item_id -> {rank, total, priceScore, qualityScore, gateReason}
+  // optimizer 结果 lookup
   const optimizerByItemId = new Map<
     string,
     {
@@ -162,6 +187,30 @@ export async function POST(req: Request) {
   }
   for (const r of optimizerResult?.rejected ?? []) {
     optimizerByItemId.set(r.item_id, { gateReason: r.reason });
+  }
+
+  // enrichedFields lookup (透传, 不落表)
+  const enrichedByItemId = new Map<string, MatcherOptimizerFields>();
+  for (const c of candidates) {
+    if (c.item_id && c.optimizer_fields) {
+      enrichedByItemId.set(c.item_id, c.optimizer_fields);
+    }
+  }
+  const additionalImagesByItemId = new Map<string, string[]>();
+  for (const c of candidates) {
+    if (c.item_id && c.additional_image_urls?.length) {
+      additionalImagesByItemId.set(c.item_id, c.additional_image_urls);
+    }
+  }
+  // 品牌来自 compatibility (matcher 已经从 eBay aspects 抽好)
+  const brandByItemId = new Map<string, string>();
+  const compatByItemId = new Map<string, Record<string, unknown>>();
+  for (const c of candidates) {
+    if (!c.item_id) continue;
+    const compat = c.compatibility || {};
+    const brand = (compat.Brand as string) || (compat.Make as string) || "";
+    if (brand) brandByItemId.set(c.item_id, brand);
+    compatByItemId.set(c.item_id, compat);
   }
 
   const matchSearch = await prisma.matchSearch.create({
@@ -194,6 +243,7 @@ export async function POST(req: Request) {
             optimizerPriceScore: opt.priceScore ?? null,
             optimizerQualityScore: opt.qualityScore ?? null,
             optimizerGateReason: opt.gateReason ?? null,
+            imageUrl: c.image_url ?? null,
           };
         }),
       },
@@ -237,6 +287,12 @@ export async function POST(req: Request) {
       optimizerPriceScore: c.optimizerPriceScore,
       optimizerQualityScore: c.optimizerQualityScore,
       optimizerGateReason: c.optimizerGateReason,
+      // ---- 新增: 透传 (不落 Candidate 表) ----
+      brand: brandByItemId.get(c.ebayItemId) ?? null,
+      enrichedFields: enrichedByItemId.get(c.ebayItemId) ?? null,
+      compatibility: compatByItemId.get(c.ebayItemId) ?? null,
+      imageUrl: c.imageUrl,
+      additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
     })),
     meta: {
       matcherDurationMs,

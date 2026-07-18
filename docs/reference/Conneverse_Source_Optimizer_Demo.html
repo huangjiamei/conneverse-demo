@@ -1,173 +1,717 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Conneverse — Source Optimizer Demo</title>
-<style>
-:root{--navy:#1F3A5F;--teal:#2E7D8A;--accent:#C7732B;--green:#2E7D32;--red:#B23B3B;--ink:#1c2733;--muted:#64727e;--line:#e4eaef;--bg:#f6f8fa;--card:#fff}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;padding:24px 20px 60px}
-.wrap{max-width:1180px;margin:0 auto}
-h1{font-size:23px;color:var(--navy);letter-spacing:-.3px}
-.sub{color:var(--muted);font-size:13px;margin-top:4px}
-.tag{display:inline-block;background:var(--navy);color:#fff;font-size:11px;font-weight:600;padding:3px 9px;border-radius:11px;margin-right:6px}
-header{border-bottom:3px solid var(--navy);padding-bottom:14px;margin-bottom:18px}
-.parts{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
-.pbtn{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-size:12.5px;cursor:pointer;color:var(--ink)}
-.pbtn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
-.panel{display:grid;grid-template-columns:330px 1fr;gap:18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.card h2{font-size:13px;color:var(--navy);margin-bottom:9px;text-transform:uppercase;letter-spacing:.4px}
-.gate{background:#fbf6ef;border:1px solid #ecdcc6;border-radius:9px;padding:11px 13px;margin-bottom:13px}
-.gate h2{color:var(--accent)}
-.row{margin:9px 0}
-.row label{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:3px}
-.row .v{color:var(--teal)}
-input[type=range]{width:100%;accent-color:var(--teal)}
-.gate input[type=range]{accent-color:var(--accent)}
-.toggle{font-size:12.5px;display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600}
-.presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.preset{font-size:11.5px;border:1px solid var(--navy);color:var(--navy);background:#fff;border-radius:14px;padding:5px 11px;cursor:pointer}
-.rec{background:#eef5f6;border-left:4px solid var(--teal);border-radius:8px;padding:12px 15px;font-size:13.5px;margin-bottom:14px}
-.rec.warn{background:#fbeeee;border-color:var(--red)}
-.rec b{color:var(--navy)}
-table{width:100%;border-collapse:collapse;font-size:12.5px}
-th,td{padding:8px;border-bottom:1px solid var(--line);text-align:center}
-th{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--line)}
-td.l,th.l{text-align:left}
-tr.win{background:#eef7ee}tr.win td{font-weight:600}
-tr.out{opacity:.5}
-tr.out td{color:var(--muted)}
-.pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;margin-left:6px}
-.pill.rec{background:var(--green);color:#fff}.pill.cheap{background:#eceff2;color:#566}
-.status-ok{color:var(--green);font-weight:600}
-.status-no{color:var(--red);font-weight:600}
-.bar{height:7px;background:#eef2f5;border-radius:4px;overflow:hidden;width:60px;display:inline-block;vertical-align:middle;margin-right:5px}
-.bar>i{display:block;height:100%}
-.tot{font-weight:700;color:var(--navy)}
-.foot{margin-top:18px;color:var(--muted);font-size:11.5px;border-top:1px solid var(--line);padding-top:12px}
-@media(max-width:860px){.panel{grid-template-columns:1fr}}
-</style></head>
-<body><div class="wrap">
-<header>
-<h1>Source Optimizer — gates first, then score</h1>
-<div class="sub"><span class="tag">CONNEVERSE</span> Hard rules (stock, fitment) remove options from the pool; soft scoring (price, quality) ranks only what's left. Live A-Premium data, Jun 2026.</div>
-</header>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Conneverse — Source Optimizer Demo</title>
+    <style>
+      :root {
+        --navy: #1f3a5f;
+        --teal: #2e7d8a;
+        --accent: #c7732b;
+        --green: #2e7d32;
+        --red: #b23b3b;
+        --ink: #1c2733;
+        --muted: #64727e;
+        --line: #e4eaef;
+        --bg: #f6f8fa;
+        --card: #fff;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        line-height: 1.45;
+        padding: 24px 20px 60px;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 23px;
+        color: var(--navy);
+        letter-spacing: -0.3px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 4px;
+      }
+      .tag {
+        display: inline-block;
+        background: var(--navy);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 11px;
+        margin-right: 6px;
+      }
+      header {
+        border-bottom: 3px solid var(--navy);
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+      .parts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-bottom: 14px;
+      }
+      .pbtn {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 20px;
+        padding: 6px 13px;
+        font-size: 12.5px;
+        cursor: pointer;
+        color: var(--ink);
+      }
+      .pbtn.on {
+        background: var(--navy);
+        color: #fff;
+        border-color: var(--navy);
+      }
+      .panel {
+        display: grid;
+        grid-template-columns: 330px 1fr;
+        gap: 18px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 18px;
+      }
+      .card h2 {
+        font-size: 13px;
+        color: var(--navy);
+        margin-bottom: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+      .gate {
+        background: #fbf6ef;
+        border: 1px solid #ecdcc6;
+        border-radius: 9px;
+        padding: 11px 13px;
+        margin-bottom: 13px;
+      }
+      .gate h2 {
+        color: var(--accent);
+      }
+      .row {
+        margin: 9px 0;
+      }
+      .row label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+      .row .v {
+        color: var(--teal);
+      }
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--teal);
+      }
+      .gate input[type="range"] {
+        accent-color: var(--accent);
+      }
+      .toggle {
+        font-size: 12.5px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .preset {
+        font-size: 11.5px;
+        border: 1px solid var(--navy);
+        color: var(--navy);
+        background: #fff;
+        border-radius: 14px;
+        padding: 5px 11px;
+        cursor: pointer;
+      }
+      .rec {
+        background: #eef5f6;
+        border-left: 4px solid var(--teal);
+        border-radius: 8px;
+        padding: 12px 15px;
+        font-size: 13.5px;
+        margin-bottom: 14px;
+      }
+      .rec.warn {
+        background: #fbeeee;
+        border-color: var(--red);
+      }
+      .rec b {
+        color: var(--navy);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      th,
+      td {
+        padding: 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: center;
+      }
+      th {
+        color: var(--muted);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        border-bottom: 2px solid var(--line);
+      }
+      td.l,
+      th.l {
+        text-align: left;
+      }
+      tr.win {
+        background: #eef7ee;
+      }
+      tr.win td {
+        font-weight: 600;
+      }
+      tr.out {
+        opacity: 0.5;
+      }
+      tr.out td {
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 9px;
+        margin-left: 6px;
+      }
+      .pill.rec {
+        background: var(--green);
+        color: #fff;
+      }
+      .pill.cheap {
+        background: #eceff2;
+        color: #566;
+      }
+      .status-ok {
+        color: var(--green);
+        font-weight: 600;
+      }
+      .status-no {
+        color: var(--red);
+        font-weight: 600;
+      }
+      .bar {
+        height: 7px;
+        background: #eef2f5;
+        border-radius: 4px;
+        overflow: hidden;
+        width: 60px;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 5px;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+      }
+      .tot {
+        font-weight: 700;
+        color: var(--navy);
+      }
+      .foot {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 11.5px;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+      @media (max-width: 860px) {
+        .panel {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Source Optimizer — gates first, then score</h1>
+        <div class="sub">
+          <span class="tag">CONNEVERSE</span> Hard rules (stock, fitment) remove
+          options from the pool; soft scoring (price, quality) ranks only what's
+          left. Live A-Premium data, Jun 2026.
+        </div>
+      </header>
 
-<div class="parts" id="parts"></div>
+      <div class="parts" id="parts"></div>
 
-<div class="panel">
-  <div class="card">
-    <div class="presets" id="presets"></div>
-    <div class="gate">
-      <h2>Hard gates — knockouts</h2>
-      <label class="toggle"><input type="checkbox" id="gStock" checked> Must be in stock</label>
-      <div class="row"><label>Max fitment-complaint rate <span class="v" id="vFit">15%</span></label><input type="range" id="gFit" min="0" max="50" value="15"><div style="font-size:10.5px;color:#888">Applied only when there's a real review sample (≥8).</div></div>
-      <div class="row"><label>Min reviews to trust <span class="v" id="vRev">0</span></label><input type="range" id="gRev" min="0" max="200" value="0"></div>
+      <div class="panel">
+        <div class="card">
+          <div class="presets" id="presets"></div>
+          <div class="gate">
+            <h2>Hard gates — knockouts</h2>
+            <label class="toggle"
+              ><input type="checkbox" id="gStock" checked /> Must be in
+              stock</label
+            >
+            <div class="row">
+              <label
+                >Max fitment-complaint rate
+                <span class="v" id="vFit">15%</span></label
+              ><input type="range" id="gFit" min="0" max="50" value="15" />
+              <div style="font-size: 10.5px; color: #888">
+                Applied only when there's a real review sample (≥8).
+              </div>
+            </div>
+            <div class="row">
+              <label
+                >Min reviews to trust <span class="v" id="vRev">0</span></label
+              ><input type="range" id="gRev" min="0" max="200" value="0" />
+            </div>
+          </div>
+          <h2>Soft weights — rank the survivors</h2>
+          <div class="row">
+            <label>Price <span class="v" id="wp">50%</span></label
+            ><input type="range" id="sp" min="0" max="100" value="50" />
+          </div>
+          <div class="row">
+            <label>Quality <span class="v" id="wq">50%</span></label
+            ><input type="range" id="sq" min="0" max="100" value="50" />
+          </div>
+          <label
+            class="toggle"
+            style="
+              font-weight: 400;
+              font-size: 12px;
+              color: var(--muted);
+              margin-top: 8px;
+            "
+            ><input type="checkbox" id="haircut" checked /> Self-host haircut on
+            house brand</label
+          >
+        </div>
+        <div class="card">
+          <div class="rec" id="rec"></div>
+          <table id="tbl">
+            <thead>
+              <tr>
+                <th class="l">Brand</th>
+                <th>Price/unit</th>
+                <th>Rating (n)</th>
+                <th>Stock</th>
+                <th>Fitment</th>
+                <th>Status</th>
+                <th>Price</th>
+                <th>Quality</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div
+            style="margin-top: 9px; font-size: 11px; color: var(--muted)"
+            id="ctx"
+          ></div>
+        </div>
+      </div>
+      <div class="foot" id="foot"></div>
     </div>
-    <h2>Soft weights — rank the survivors</h2>
-    <div class="row"><label>Price <span class="v" id="wp">50%</span></label><input type="range" id="sp" min="0" max="100" value="50"></div>
-    <div class="row"><label>Quality <span class="v" id="wq">50%</span></label><input type="range" id="sq" min="0" max="100" value="50"></div>
-    <label class="toggle" style="font-weight:400;font-size:12px;color:var(--muted);margin-top:8px"><input type="checkbox" id="haircut" checked> Self-host haircut on house brand</label>
-  </div>
-  <div class="card">
-    <div class="rec" id="rec"></div>
-    <table id="tbl"><thead><tr>
-      <th class="l">Brand</th><th>Price/unit</th><th>Rating (n)</th><th>Stock</th><th>Fitment</th><th>Status</th>
-      <th>Price</th><th>Quality</th><th>Score</th></tr></thead><tbody></tbody></table>
-    <div style="margin-top:9px;font-size:11px;color:var(--muted)" id="ctx"></div>
-  </div>
-</div>
-<div class="foot" id="foot"></div>
-</div>
-<script>
-const DATA=[
- {id:'fuelpump',name:'Fuel pump module',veh:'Chevrolet · OEM 19370465',oem:'19370465',c:[
-   {brand:'ÜRO Parts',price:123.99,rating:4.8,reviews:4,warr:3,avail:30,fc:0,ss:4,recent:100,house:false},
-   {brand:'Aisin',price:129.99,rating:4.5,reviews:689,warr:3,avail:6,fc:0,ss:10,recent:100,house:false},
-   {brand:'TYC',price:144.99,rating:4.0,reviews:9,warr:3,avail:1,fc:0,ss:9,recent:89,house:false},
-   {brand:'Bosch',price:287.99,rating:3.0,reviews:1,warr:3,avail:30,fc:0,ss:1,recent:100,house:false},
-   {brand:'Delphi',price:319.99,rating:4.3,reviews:6,warr:3,avail:30,fc:0,ss:6,recent:83,house:false}]},
- {id:'hub',name:'Rear wheel hub',veh:'Toyota RAV4 · OEM 424100R010',oem:'424100R010',c:[
-   {brand:'A-Premium',price:58,rating:4.7,reviews:495,warr:3,avail:30,fc:1,ss:10,recent:100,house:true},
-   {brand:'Centric',price:158.99,rating:5.0,reviews:2,warr:3,avail:0,fc:0,ss:2,recent:100,house:false}]},
- {id:'tierod',name:'Outer tie rod end',veh:'Honda · OEM 53540TLAA01',oem:'53540TLAA01',c:[
-   {brand:'MOOG',price:38.99,rating:4.7,reviews:15,warr:3,avail:30,fc:0,ss:10,recent:100,house:false},
-   {brand:'Mevotech',price:41.99,rating:3.7,reviews:6,warr:3,avail:30,fc:0,ss:6,recent:100,house:false},
-   {brand:'A-Premium',price:56.99,rating:4.7,reviews:138,warr:3,avail:6,fc:2,ss:10,recent:100,house:true}]},
- {id:'controlarm',name:'Front lower control arm',veh:'Honda · OEM 51360TLAA71',oem:'51360TLAA71',c:[
-   {brand:'Mevotech',price:191.99,rating:3.7,reviews:6,warr:3,avail:30,fc:0,ss:6,recent:100,house:false},
-   {brand:'Suspensia',price:209.99,rating:5.0,reviews:5,warr:3,avail:0,fc:0,ss:5,recent:100,house:false}]},
- {id:'swaylink',name:'Front sway bar link',veh:'Chevrolet · OEM 84517192',oem:'84517192',c:[
-   {brand:'A-Premium',price:24,rating:4.7,reviews:199,warr:3,avail:6,fc:0,ss:10,recent:100,house:true},
-   {brand:'Mevotech',price:45.99,rating:3.7,reviews:6,warr:3,avail:30,fc:0,ss:6,recent:100,house:false}]}
-];
-// scenario presets: gates + weights together
-const PRESETS={
- 'Same-day job':{stock:true,fit:15,rev:0,wp:45,wq:55},
- 'Cost-first':{stock:true,fit:25,rev:0,wp:80,wq:20},
- 'Quality-first':{stock:true,fit:10,rev:0,wp:15,wq:85},
- 'Scheduled (can wait)':{stock:false,fit:15,rev:0,wp:55,wq:45}
-};
-let cur=0;
-const $=id=>document.getElementById(id);
-const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-const adjR=(r,n)=>(r*n+4.2*20)/(n+20);
-function qualityScore(c,hc){let ar=adjR(c.rating,c.reviews);if(c.house&&hc)ar-=0.3;let q=clamp((ar-3.5)/1.4*60+40,0,100);q*=(0.65+0.35*c.recent/100);if(c.warr>=3)q+=2;return clamp(q,0,100);}
-function priceScore(p,mn){return clamp(100*mn/p,0,100);}
-function gateCheck(c,g){
-  if(g.stock && c.avail<=0) return 'out of stock';
-  if(c.ss>=8 && (c.fc/c.ss) > g.fit/100) return 'fitment risk '+Math.round(c.fc/c.ss*100)+'%';
-  if(c.reviews < g.rev) return 'only '+c.reviews+' reviews';
-  return null;
-}
-function bar(v){const col=v>=75?'#2E7D32':v>=55?'#C7732B':'#B23B3B';return `<span class="bar"><i style="width:${Math.round(v)}%;background:${col}"></i></span>${Math.round(v)}`;}
-function weights(){let p=+$('sp').value,q=+$('sq').value,s=p+q||1;return{p:p/s,q:q/s};}
-function render(){
-  const part=DATA[cur];const hc=$('haircut').checked;
-  const g={stock:$('gStock').checked,fit:+$('gFit').value,rev:+$('gRev').value};
-  $('vFit').textContent=g.fit+'%';$('vRev').textContent=g.rev;
-  const w=weights();$('wp').textContent=Math.round(w.p*100)+'%';$('wq').textContent=Math.round(w.q*100)+'%';
-  // stage 1: gates
-  const rows=part.c.map(c=>({c,out:gateCheck(c,g)}));
-  const elig=rows.filter(r=>!r.out);
-  // stage 2: score eligible
-  if(elig.length){const mn=Math.min(...elig.map(r=>r.c.price));
-    elig.forEach(r=>{r.ps=priceScore(r.c.price,mn);r.qs=qualityScore(r.c,hc);r.tot=w.p*r.ps+w.q*r.qs;});
-    elig.sort((a,b)=>b.tot-a.tot);}
-  const winner=elig[0]; const cheapestAll=part.c.reduce((a,b)=>a.price<b.price?a:b);
-  // order rows: eligible (by score) then excluded
-  const ordered=[...elig,...rows.filter(r=>r.out)];
-  const tb=$('tbl').querySelector('tbody');
-  tb.innerHTML=ordered.map(r=>{
-    const c=r.c, isWin=r===winner, isCheap=c===cheapestAll;
-    const stock=c.avail<=0?'<span class="status-no">none</span>':(c.avail<10?c.avail+' left':'in stock');
-    const fitTxt=c.fc>0?`${c.fc}/${c.ss} ⚠`:'clean';
-    return `<tr class="${isWin?'win':''}${r.out?' out':''}">
-      <td class="l">${c.brand}${isWin?'<span class="pill rec">PICK</span>':''}${isCheap?'<span class="pill cheap">cheapest</span>':''}${c.house?' <span style="color:#889;font-size:11px">house</span>':''}</td>
+    <script>
+      const DATA = [
+        {
+          id: "fuelpump",
+          name: "Fuel pump module",
+          veh: "Chevrolet · OEM 19370465",
+          oem: "19370465",
+          c: [
+            {
+              brand: "ÜRO Parts",
+              price: 123.99,
+              rating: 4.8,
+              reviews: 4,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 4,
+              recent: 100,
+              house: false,
+            },
+            {
+              brand: "Aisin",
+              price: 129.99,
+              rating: 4.5,
+              reviews: 689,
+              warr: 3,
+              avail: 6,
+              fc: 0,
+              ss: 10,
+              recent: 100,
+              house: false,
+            },
+            {
+              brand: "TYC",
+              price: 144.99,
+              rating: 4.0,
+              reviews: 9,
+              warr: 3,
+              avail: 1,
+              fc: 0,
+              ss: 9,
+              recent: 89,
+              house: false,
+            },
+            {
+              brand: "Bosch",
+              price: 287.99,
+              rating: 3.0,
+              reviews: 1,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 1,
+              recent: 100,
+              house: false,
+            },
+            {
+              brand: "Delphi",
+              price: 319.99,
+              rating: 4.3,
+              reviews: 6,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 6,
+              recent: 83,
+              house: false,
+            },
+          ],
+        },
+        {
+          id: "hub",
+          name: "Rear wheel hub",
+          veh: "Toyota RAV4 · OEM 424100R010",
+          oem: "424100R010",
+          c: [
+            {
+              brand: "A-Premium",
+              price: 58,
+              rating: 4.7,
+              reviews: 495,
+              warr: 3,
+              avail: 30,
+              fc: 1,
+              ss: 10,
+              recent: 100,
+              house: true,
+            },
+            {
+              brand: "Centric",
+              price: 158.99,
+              rating: 5.0,
+              reviews: 2,
+              warr: 3,
+              avail: 0,
+              fc: 0,
+              ss: 2,
+              recent: 100,
+              house: false,
+            },
+          ],
+        },
+        {
+          id: "tierod",
+          name: "Outer tie rod end",
+          veh: "Honda · OEM 53540TLAA01",
+          oem: "53540TLAA01",
+          c: [
+            {
+              brand: "MOOG",
+              price: 38.99,
+              rating: 4.7,
+              reviews: 15,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 10,
+              recent: 100,
+              house: false,
+            },
+            {
+              brand: "Mevotech",
+              price: 41.99,
+              rating: 3.7,
+              reviews: 6,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 6,
+              recent: 100,
+              house: false,
+            },
+            {
+              brand: "A-Premium",
+              price: 56.99,
+              rating: 4.7,
+              reviews: 138,
+              warr: 3,
+              avail: 6,
+              fc: 2,
+              ss: 10,
+              recent: 100,
+              house: true,
+            },
+          ],
+        },
+        {
+          id: "controlarm",
+          name: "Front lower control arm",
+          veh: "Honda · OEM 51360TLAA71",
+          oem: "51360TLAA71",
+          c: [
+            {
+              brand: "Mevotech",
+              price: 191.99,
+              rating: 3.7,
+              reviews: 6,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 6,
+              recent: 100,
+              house: false,
+            },
+            {
+              brand: "Suspensia",
+              price: 209.99,
+              rating: 5.0,
+              reviews: 5,
+              warr: 3,
+              avail: 0,
+              fc: 0,
+              ss: 5,
+              recent: 100,
+              house: false,
+            },
+          ],
+        },
+        {
+          id: "swaylink",
+          name: "Front sway bar link",
+          veh: "Chevrolet · OEM 84517192",
+          oem: "84517192",
+          c: [
+            {
+              brand: "A-Premium",
+              price: 24,
+              rating: 4.7,
+              reviews: 199,
+              warr: 3,
+              avail: 6,
+              fc: 0,
+              ss: 10,
+              recent: 100,
+              house: true,
+            },
+            {
+              brand: "Mevotech",
+              price: 45.99,
+              rating: 3.7,
+              reviews: 6,
+              warr: 3,
+              avail: 30,
+              fc: 0,
+              ss: 6,
+              recent: 100,
+              house: false,
+            },
+          ],
+        },
+      ];
+      // scenario presets: gates + weights together
+      const PRESETS = {
+        "Same-day job": { stock: true, fit: 15, rev: 0, wp: 45, wq: 55 },
+        "Cost-first": { stock: true, fit: 25, rev: 0, wp: 80, wq: 20 },
+        "Quality-first": { stock: true, fit: 10, rev: 0, wp: 15, wq: 85 },
+        "Scheduled (can wait)": {
+          stock: false,
+          fit: 15,
+          rev: 0,
+          wp: 55,
+          wq: 45,
+        },
+      };
+      let cur = 0;
+      const $ = (id) => document.getElementById(id);
+      const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+      const adjR = (r, n) => (r * n + 4.2 * 20) / (n + 20);
+      function qualityScore(c, hc) {
+        let ar = adjR(c.rating, c.reviews);
+        if (c.house && hc) ar -= 0.3;
+        let q = clamp(((ar - 3.5) / 1.4) * 60 + 40, 0, 100);
+        q *= 0.65 + (0.35 * c.recent) / 100;
+        if (c.warr >= 3) q += 2;
+        return clamp(q, 0, 100);
+      }
+      function priceScore(p, mn) {
+        return clamp((100 * mn) / p, 0, 100);
+      }
+      function gateCheck(c, g) {
+        if (g.stock && c.avail <= 0) return "out of stock";
+        if (c.ss >= 8 && c.fc / c.ss > g.fit / 100)
+          return "fitment risk " + Math.round((c.fc / c.ss) * 100) + "%";
+        if (c.reviews < g.rev) return "only " + c.reviews + " reviews";
+        return null;
+      }
+      function bar(v) {
+        const col = v >= 75 ? "#2E7D32" : v >= 55 ? "#C7732B" : "#B23B3B";
+        return `<span class="bar"><i style="width:${Math.round(v)}%;background:${col}"></i></span>${Math.round(v)}`;
+      }
+      function weights() {
+        let p = +$("sp").value,
+          q = +$("sq").value,
+          s = p + q || 1;
+        return { p: p / s, q: q / s };
+      }
+      function render() {
+        const part = DATA[cur];
+        const hc = $("haircut").checked;
+        const g = {
+          stock: $("gStock").checked,
+          fit: +$("gFit").value,
+          rev: +$("gRev").value,
+        };
+        $("vFit").textContent = g.fit + "%";
+        $("vRev").textContent = g.rev;
+        const w = weights();
+        $("wp").textContent = Math.round(w.p * 100) + "%";
+        $("wq").textContent = Math.round(w.q * 100) + "%";
+        // stage 1: gates
+        const rows = part.c.map((c) => ({ c, out: gateCheck(c, g) }));
+        const elig = rows.filter((r) => !r.out);
+        // stage 2: score eligible
+        if (elig.length) {
+          const mn = Math.min(...elig.map((r) => r.c.price));
+          elig.forEach((r) => {
+            r.ps = priceScore(r.c.price, mn);
+            r.qs = qualityScore(r.c, hc);
+            r.tot = w.p * r.ps + w.q * r.qs;
+          });
+          elig.sort((a, b) => b.tot - a.tot);
+        }
+        const winner = elig[0];
+        const cheapestAll = part.c.reduce((a, b) =>
+          a.price < b.price ? a : b,
+        );
+        // order rows: eligible (by score) then excluded
+        const ordered = [...elig, ...rows.filter((r) => r.out)];
+        const tb = $("tbl").querySelector("tbody");
+        tb.innerHTML = ordered
+          .map((r) => {
+            const c = r.c,
+              isWin = r === winner,
+              isCheap = c === cheapestAll;
+            const stock =
+              c.avail <= 0
+                ? '<span class="status-no">none</span>'
+                : c.avail < 10
+                  ? c.avail + " left"
+                  : "in stock";
+            const fitTxt = c.fc > 0 ? `${c.fc}/${c.ss} ⚠` : "clean";
+            return `<tr class="${isWin ? "win" : ""}${r.out ? " out" : ""}">
+      <td class="l">${c.brand}${isWin ? '<span class="pill rec">PICK</span>' : ""}${isCheap ? '<span class="pill cheap">cheapest</span>' : ""}${c.house ? ' <span style="color:#889;font-size:11px">house</span>' : ""}</td>
       <td>$${c.price.toFixed(2)}</td><td>${c.rating}★ <span style="color:#889">(${c.reviews})</span></td>
       <td>${stock}</td><td>${fitTxt}</td>
-      <td>${r.out?`<span class="status-no">✗ ${r.out}</span>`:'<span class="status-ok">✓ eligible</span>'}</td>
-      <td>${r.out?'—':bar(r.ps)}</td><td>${r.out?'—':bar(r.qs)}</td><td>${r.out?'—':'<span class="tot">'+Math.round(r.tot)+'</span>'}</td></tr>`;
-  }).join('');
-  const nOut=rows.length-elig.length;
-  if(!winner){
-    $('rec').className='rec warn';
-    $('rec').innerHTML=`<b>No option passes the gates.</b> All ${rows.length} candidates were knocked out (${rows.map(r=>r.c.brand+': '+r.out).join('; ')}). Loosen a gate — e.g., allow backorder or lower the review floor.`;
-  } else {
-    $('rec').className='rec';
-    const cheapElig=elig.reduce((a,b)=>a.c.price<b.c.price?a:b);
-    const note = winner!==cheapElig ? `It isn't the cheapest survivor (${cheapElig.c.brand} $${cheapElig.c.price.toFixed(2)}) — quality weighting earns it.` :
-      (nOut>0 ? `It's the cheapest of the ${elig.length} that survived the gates; the knockouts removed the traps.` : `Cheapest eligible option, and nothing was gated out here.`);
-    $('rec').innerHTML=`<b>Pick: ${winner.c.brand} — $${winner.c.price.toFixed(2)}</b> (score ${Math.round(winner.tot)}). ${elig.length} eligible, ${nOut} knocked out. ${note}`;
-  }
-  $('ctx').innerHTML=`Fitment = low-score reviews mentioning fit in a recent 10-review sample. <a href="https://a-premium.com/search?keyword=${part.oem}" target="_blank">See all options on A-Premium ↗</a>`;
-}
-$('parts').innerHTML=DATA.map((p,i)=>`<button class="pbtn ${i===0?'on':''}" data-i="${i}">${p.name}</button>`).join('');
-$('parts').querySelectorAll('.pbtn').forEach(b=>b.onclick=()=>{cur=+b.dataset.i;$('parts').querySelectorAll('.pbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on');render();});
-$('presets').innerHTML=Object.keys(PRESETS).map(k=>`<button class="preset" data-k="${k}">${k}</button>`).join('');
-$('presets').querySelectorAll('.preset').forEach(b=>b.onclick=()=>{const v=PRESETS[b.dataset.k];$('gStock').checked=v.stock;$('gFit').value=v.fit;$('gRev').value=v.rev;$('sp').value=v.wp;$('sq').value=v.wq;render();});
-['sp','sq','gStock','gFit','gRev','haircut'].forEach(id=>$(id).addEventListener('input',render));
-$('foot').innerHTML='<b>Two-stage model.</b> Stage 1 — hard gates remove any part that fails a non-negotiable rule (out of stock, fitment-complaint rate over threshold once there is a real sample, or too few reviews to trust). Stage 2 — the survivors are ranked by a soft Price × Quality score (Quality = volume-weighted star rating shrunk toward a 4.2 prior, recency-adjusted, with a self-host haircut on house brand). '+
- 'This fixes the flaw in a pure weighted sum, where a low price could "buy back" an unbuyable or ill-fitting part. <b>Caveats:</b> fitment rate is a recent 10-review sample (production pages all/low-score reviews); A-Premium reviews are self-hosted; prices Jun 2026 incl. promo. Single-channel prototype — the live optimizer runs the same gates+score across OEM dealer, recycled and multiple DTCs, where delivery-speed becomes a soft dimension among in-stock options.';
-render();
-</script>
-</body></html>
+      <td>${r.out ? `<span class="status-no">✗ ${r.out}</span>` : '<span class="status-ok">✓ eligible</span>'}</td>
+      <td>${r.out ? "—" : bar(r.ps)}</td><td>${r.out ? "—" : bar(r.qs)}</td><td>${r.out ? "—" : '<span class="tot">' + Math.round(r.tot) + "</span>"}</td></tr>`;
+          })
+          .join("");
+        const nOut = rows.length - elig.length;
+        if (!winner) {
+          $("rec").className = "rec warn";
+          $("rec").innerHTML =
+            `<b>No option passes the gates.</b> All ${rows.length} candidates were knocked out (${rows.map((r) => r.c.brand + ": " + r.out).join("; ")}). Loosen a gate — e.g., allow backorder or lower the review floor.`;
+        } else {
+          $("rec").className = "rec";
+          const cheapElig = elig.reduce((a, b) =>
+            a.c.price < b.c.price ? a : b,
+          );
+          const note =
+            winner !== cheapElig
+              ? `It isn't the cheapest survivor (${cheapElig.c.brand} $${cheapElig.c.price.toFixed(2)}) — quality weighting earns it.`
+              : nOut > 0
+                ? `It's the cheapest of the ${elig.length} that survived the gates; the knockouts removed the traps.`
+                : `Cheapest eligible option, and nothing was gated out here.`;
+          $("rec").innerHTML =
+            `<b>Pick: ${winner.c.brand} — $${winner.c.price.toFixed(2)}</b> (score ${Math.round(winner.tot)}). ${elig.length} eligible, ${nOut} knocked out. ${note}`;
+        }
+        $("ctx").innerHTML =
+          `Fitment = low-score reviews mentioning fit in a recent 10-review sample. <a href="https://a-premium.com/search?keyword=${part.oem}" target="_blank">See all options on A-Premium ↗</a>`;
+      }
+      $("parts").innerHTML = DATA.map(
+        (p, i) =>
+          `<button class="pbtn ${i === 0 ? "on" : ""}" data-i="${i}">${p.name}</button>`,
+      ).join("");
+      $("parts")
+        .querySelectorAll(".pbtn")
+        .forEach(
+          (b) =>
+            (b.onclick = () => {
+              cur = +b.dataset.i;
+              $("parts")
+                .querySelectorAll(".pbtn")
+                .forEach((x) => x.classList.remove("on"));
+              b.classList.add("on");
+              render();
+            }),
+        );
+      $("presets").innerHTML = Object.keys(PRESETS)
+        .map((k) => `<button class="preset" data-k="${k}">${k}</button>`)
+        .join("");
+      $("presets")
+        .querySelectorAll(".preset")
+        .forEach(
+          (b) =>
+            (b.onclick = () => {
+              const v = PRESETS[b.dataset.k];
+              $("gStock").checked = v.stock;
+              $("gFit").value = v.fit;
+              $("gRev").value = v.rev;
+              $("sp").value = v.wp;
+              $("sq").value = v.wq;
+              render();
+            }),
+        );
+      ["sp", "sq", "gStock", "gFit", "gRev", "haircut"].forEach((id) =>
+        $(id).addEventListener("input", render),
+      );
+      $("foot").innerHTML =
+        "<b>Two-stage model.</b> Stage 1 — hard gates remove any part that fails a non-negotiable rule (out of stock, fitment-complaint rate over threshold once there is a real sample, or too few reviews to trust). Stage 2 — the survivors are ranked by a soft Price × Quality score (Quality = volume-weighted star rating shrunk toward a 4.2 prior, recency-adjusted, with a self-host haircut on house brand). " +
+        'This fixes the flaw in a pure weighted sum, where a low price could "buy back" an unbuyable or ill-fitting part. <b>Caveats:</b> fitment rate is a recent 10-review sample (production pages all/low-score reviews); A-Premium reviews are self-hosted; prices Jun 2026 incl. promo. Single-channel prototype — the live optimizer runs the same gates+score across OEM dealer, recycled and multiple DTCs, where delivery-speed becomes a soft dimension among in-stock options.';
+      render();
+    </script>
+  </body>
+</html>

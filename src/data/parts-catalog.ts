@@ -60,7 +60,7 @@ function buildSuppliers(
   basePrice: number,
   brands: Record<string, string>,
   warranties: Record<string, string>,
-  isEuropean = false
+  isEuropean = false,
 ): SupplierEntry[] {
   const adjustedBase = isEuropean ? basePrice * 1.5 : basePrice;
   return SUPPLIERS.map((s) => ({
@@ -99,8 +99,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: "https://www.youtube.com/watch?v=3P5v0BjfnBk",
     suppliers: buildSuppliers(
       38.0,
-      { "metro-parts": "ACDelco", "national-auto": "Bosch", proparts: "Power Stop", valueparts: "Wagner", automarket: "EBC", directbrand: "Brembo" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "ACDelco",
+        "national-auto": "Bosch",
+        proparts: "Power Stop",
+        valueparts: "Wagner",
+        automarket: "EBC",
+        directbrand: "Brembo",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -114,8 +128,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: "https://www.youtube.com/watch?v=3P5v0BjfnBk",
     suppliers: buildSuppliers(
       32.0,
-      { "metro-parts": "ACDelco", "national-auto": "Bosch", proparts: "Wagner", valueparts: "Power Stop", automarket: "EBC", directbrand: "Brembo" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "ACDelco",
+        "national-auto": "Bosch",
+        proparts: "Wagner",
+        valueparts: "Power Stop",
+        automarket: "EBC",
+        directbrand: "Brembo",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -129,8 +157,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       45.0,
-      { "metro-parts": "ACDelco", "national-auto": "Bosch", proparts: "Power Stop", valueparts: "Wagner", automarket: "EBC", directbrand: "Brembo" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "ACDelco",
+        "national-auto": "Bosch",
+        proparts: "Power Stop",
+        valueparts: "Wagner",
+        automarket: "EBC",
+        directbrand: "Brembo",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -144,8 +186,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       38.0,
-      { "metro-parts": "Bosch", "national-auto": "ACDelco", proparts: "Power Stop", valueparts: "Wagner", automarket: "EBC", directbrand: "Brembo" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Bosch",
+        "national-auto": "ACDelco",
+        proparts: "Power Stop",
+        valueparts: "Wagner",
+        automarket: "EBC",
+        directbrand: "Brembo",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -159,8 +215,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       65.0,
-      { "metro-parts": "ACDelco", "national-auto": "Bosch", proparts: "Power Stop", valueparts: "Wagner", automarket: "EBC", directbrand: "Brembo" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "ACDelco",
+        "national-auto": "Bosch",
+        proparts: "Power Stop",
+        valueparts: "Wagner",
+        automarket: "EBC",
+        directbrand: "Brembo",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   // ─── BRAKES (European) ───
@@ -175,9 +245,23 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       38.0,
-      { "metro-parts": "Brembo", "national-auto": "Bosch", proparts: "EBC", valueparts: "Wagner", automarket: "EBC", directbrand: "Brembo" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" },
-      true
+      {
+        "metro-parts": "Brembo",
+        "national-auto": "Bosch",
+        proparts: "EBC",
+        valueparts: "Wagner",
+        automarket: "EBC",
+        directbrand: "Brembo",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
+      true,
     ),
   },
 
@@ -193,8 +277,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       8.0,
-      { "metro-parts": "Fram", "national-auto": "Wix", proparts: "Bosch", valueparts: "Fram", automarket: "Mann", directbrand: "Denso" },
-      { "metro-parts": "12 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Fram",
+        "national-auto": "Wix",
+        proparts: "Bosch",
+        valueparts: "Fram",
+        automarket: "Mann",
+        directbrand: "Denso",
+      },
+      {
+        "metro-parts": "12 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
   {
@@ -208,8 +306,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       18.0,
-      { "metro-parts": "K&N", "national-auto": "Fram", proparts: "Bosch", valueparts: "Wix", automarket: "Mann", directbrand: "Denso" },
-      { "metro-parts": "24 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "K&N",
+        "national-auto": "Fram",
+        proparts: "Bosch",
+        valueparts: "Wix",
+        automarket: "Mann",
+        directbrand: "Denso",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
   {
@@ -223,8 +335,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       22.0,
-      { "metro-parts": "Fram", "national-auto": "K&N", proparts: "Denso", valueparts: "Wix", automarket: "Bosch", directbrand: "Mann" },
-      { "metro-parts": "12 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Fram",
+        "national-auto": "K&N",
+        proparts: "Denso",
+        valueparts: "Wix",
+        automarket: "Bosch",
+        directbrand: "Mann",
+      },
+      {
+        "metro-parts": "12 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
   {
@@ -238,8 +364,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       28.0,
-      { "metro-parts": "Bosch", "national-auto": "Fram", proparts: "Wix", valueparts: "Mann", automarket: "Denso", directbrand: "K&N" },
-      { "metro-parts": "12 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Bosch",
+        "national-auto": "Fram",
+        proparts: "Wix",
+        valueparts: "Mann",
+        automarket: "Denso",
+        directbrand: "K&N",
+      },
+      {
+        "metro-parts": "12 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
 
@@ -255,8 +395,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       28.0,
-      { "metro-parts": "NGK", "national-auto": "Denso", proparts: "Bosch", valueparts: "Champion", automarket: "ACDelco", directbrand: "NGK" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "NGK",
+        "national-auto": "Denso",
+        proparts: "Bosch",
+        valueparts: "Champion",
+        automarket: "ACDelco",
+        directbrand: "NGK",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -270,8 +424,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       55.0,
-      { "metro-parts": "Denso", "national-auto": "Bosch", proparts: "NGK", valueparts: "ACDelco", automarket: "Champion", directbrand: "Denso" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Denso",
+        "national-auto": "Bosch",
+        proparts: "NGK",
+        valueparts: "ACDelco",
+        automarket: "Champion",
+        directbrand: "Denso",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -285,8 +453,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       32.0,
-      { "metro-parts": "ACDelco", "national-auto": "Bosch", proparts: "NGK", valueparts: "Denso", automarket: "Champion", directbrand: "Bosch" },
-      { "metro-parts": "24 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "ACDelco",
+        "national-auto": "Bosch",
+        proparts: "NGK",
+        valueparts: "Denso",
+        automarket: "Champion",
+        directbrand: "Bosch",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
 
@@ -307,8 +489,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       120.0,
-      { "metro-parts": "Bosch", "national-auto": "Denso", proparts: "Remy", valueparts: "WAI", automarket: "DB Electrical", directbrand: "Denso" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Bosch",
+        "national-auto": "Denso",
+        proparts: "Remy",
+        valueparts: "WAI",
+        automarket: "DB Electrical",
+        directbrand: "Denso",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -326,8 +522,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       145.0,
-      { "metro-parts": "Denso", "national-auto": "Bosch", proparts: "Remy", valueparts: "WAI", automarket: "DB Electrical", directbrand: "Bosch" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Denso",
+        "national-auto": "Bosch",
+        proparts: "Remy",
+        valueparts: "WAI",
+        automarket: "DB Electrical",
+        directbrand: "Bosch",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -341,8 +551,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       95.0,
-      { "metro-parts": "Bosch", "national-auto": "ACDelco", proparts: "Denso", valueparts: "WAI", automarket: "DB Electrical", directbrand: "Bosch" },
-      { "metro-parts": "36 months", "national-auto": "36 months", proparts: "24 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Bosch",
+        "national-auto": "ACDelco",
+        proparts: "Denso",
+        valueparts: "WAI",
+        automarket: "DB Electrical",
+        directbrand: "Bosch",
+      },
+      {
+        "metro-parts": "36 months",
+        "national-auto": "36 months",
+        proparts: "24 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -356,8 +580,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       48.0,
-      { "metro-parts": "Denso", "national-auto": "Bosch", proparts: "WAI", valueparts: "Denso", automarket: "DB Electrical", directbrand: "Bosch" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Denso",
+        "national-auto": "Bosch",
+        proparts: "WAI",
+        valueparts: "Denso",
+        automarket: "DB Electrical",
+        directbrand: "Bosch",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
 
@@ -373,8 +611,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       85.0,
-      { "metro-parts": "Gates", "national-auto": "ACDelco", proparts: "Dayco", valueparts: "Dorman", automarket: "Mishimoto", directbrand: "Gates" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Gates",
+        "national-auto": "ACDelco",
+        proparts: "Dayco",
+        valueparts: "Dorman",
+        automarket: "Mishimoto",
+        directbrand: "Gates",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -388,8 +640,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       22.0,
-      { "metro-parts": "Gates", "national-auto": "Dorman", proparts: "ACDelco", valueparts: "Dayco", automarket: "Dorman", directbrand: "Gates" },
-      { "metro-parts": "24 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Gates",
+        "national-auto": "Dorman",
+        proparts: "ACDelco",
+        valueparts: "Dayco",
+        automarket: "Dorman",
+        directbrand: "Gates",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
   {
@@ -403,8 +669,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       180.0,
-      { "metro-parts": "Mishimoto", "national-auto": "Dorman", proparts: "Gates", valueparts: "Dorman", automarket: "Dayco", directbrand: "Mishimoto" },
-      { "metro-parts": "36 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Mishimoto",
+        "national-auto": "Dorman",
+        proparts: "Gates",
+        valueparts: "Dorman",
+        automarket: "Dayco",
+        directbrand: "Mishimoto",
+      },
+      {
+        "metro-parts": "36 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -418,8 +698,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       38.0,
-      { "metro-parts": "Dorman", "national-auto": "ACDelco", proparts: "Gates", valueparts: "Dorman", automarket: "Dayco", directbrand: "ACDelco" },
-      { "metro-parts": "24 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Dorman",
+        "national-auto": "ACDelco",
+        proparts: "Gates",
+        valueparts: "Dorman",
+        automarket: "Dayco",
+        directbrand: "ACDelco",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
 
@@ -435,8 +729,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       18.0,
-      { "metro-parts": "Sylvania", "national-auto": "Philips", proparts: "Osram", valueparts: "GE", automarket: "Hella", directbrand: "Philips" },
-      { "metro-parts": "12 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Sylvania",
+        "national-auto": "Philips",
+        proparts: "Osram",
+        valueparts: "GE",
+        automarket: "Hella",
+        directbrand: "Philips",
+      },
+      {
+        "metro-parts": "12 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
   {
@@ -450,8 +758,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       15.0,
-      { "metro-parts": "Philips", "national-auto": "Sylvania", proparts: "Hella", valueparts: "GE", automarket: "Osram", directbrand: "Sylvania" },
-      { "metro-parts": "12 months", "national-auto": "12 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "24 months" }
+      {
+        "metro-parts": "Philips",
+        "national-auto": "Sylvania",
+        proparts: "Hella",
+        valueparts: "GE",
+        automarket: "Osram",
+        directbrand: "Sylvania",
+      },
+      {
+        "metro-parts": "12 months",
+        "national-auto": "12 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "24 months",
+      },
     ),
   },
   {
@@ -465,8 +787,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       45.0,
-      { "metro-parts": "Hella", "national-auto": "Philips", proparts: "Osram", valueparts: "Sylvania", automarket: "GE", directbrand: "Hella" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Hella",
+        "national-auto": "Philips",
+        proparts: "Osram",
+        valueparts: "Sylvania",
+        automarket: "GE",
+        directbrand: "Hella",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
 
@@ -482,8 +818,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       22.0,
-      { "metro-parts": "Moog", "national-auto": "Monroe", proparts: "TRW", valueparts: "Dorman", automarket: "KYB", directbrand: "Moog" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Moog",
+        "national-auto": "Monroe",
+        proparts: "TRW",
+        valueparts: "Dorman",
+        automarket: "KYB",
+        directbrand: "Moog",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -497,8 +847,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       95.0,
-      { "metro-parts": "Moog", "national-auto": "TRW", proparts: "Dorman", valueparts: "Monroe", automarket: "KYB", directbrand: "Moog" },
-      { "metro-parts": "36 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Moog",
+        "national-auto": "TRW",
+        proparts: "Dorman",
+        valueparts: "Monroe",
+        automarket: "KYB",
+        directbrand: "Moog",
+      },
+      {
+        "metro-parts": "36 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -512,8 +876,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       145.0,
-      { "metro-parts": "Monroe", "national-auto": "KYB", proparts: "Moog", valueparts: "Monroe", automarket: "Dorman", directbrand: "KYB" },
-      { "metro-parts": "36 months", "national-auto": "36 months", proparts: "24 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Monroe",
+        "national-auto": "KYB",
+        proparts: "Moog",
+        valueparts: "Monroe",
+        automarket: "Dorman",
+        directbrand: "KYB",
+      },
+      {
+        "metro-parts": "36 months",
+        "national-auto": "36 months",
+        proparts: "24 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
   {
@@ -527,8 +905,22 @@ export const PARTS_CATALOG: Part[] = [
     videoUrl: PLACEHOLDER_VIDEO,
     suppliers: buildSuppliers(
       42.0,
-      { "metro-parts": "Moog", "national-auto": "TRW", proparts: "Dorman", valueparts: "Monroe", automarket: "KYB", directbrand: "TRW" },
-      { "metro-parts": "24 months", "national-auto": "24 months", proparts: "12 months", valueparts: "12 months", automarket: "12 months", directbrand: "36 months" }
+      {
+        "metro-parts": "Moog",
+        "national-auto": "TRW",
+        proparts: "Dorman",
+        valueparts: "Monroe",
+        automarket: "KYB",
+        directbrand: "TRW",
+      },
+      {
+        "metro-parts": "24 months",
+        "national-auto": "24 months",
+        proparts: "12 months",
+        valueparts: "12 months",
+        automarket: "12 months",
+        directbrand: "36 months",
+      },
     ),
   },
 ];
@@ -536,12 +928,12 @@ export const PARTS_CATALOG: Part[] = [
 export function getPartsForVehicle(
   make: string,
   model: string,
-  year: number
+  year: number,
 ): Part[] {
   return PARTS_CATALOG.filter((part) =>
     part.fitment.some(
-      (f) => f.make === make && f.model === model && f.years.includes(year)
-    )
+      (f) => f.make === make && f.model === model && f.years.includes(year),
+    ),
   );
 }
 

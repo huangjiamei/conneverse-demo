@@ -20,10 +20,7 @@ export type RateLimitResult = {
   resetMs: number;
 };
 
-export function checkRateLimit(
-  token: string,
-  now: number
-): RateLimitResult {
+export function checkRateLimit(token: string, now: number): RateLimitResult {
   const bucket = buckets.get(token);
 
   if (!bucket || now - bucket.windowStart >= WINDOW_MS) {

@@ -46,11 +46,7 @@ export type RepairOrder = {
 export type OfferCondition = "new" | "used";
 
 export type SellerType =
-  | "local_distributor"
-  | "national_chain"
-  | "marketplace"
-  | "dtc"
-  | "oem_dealer";
+  "local_distributor" | "national_chain" | "marketplace" | "dtc" | "oem_dealer";
 
 export type QualitySignals = {
   /** Continuous 0..1 reliability composite — SERVER-ONLY, used for
@@ -100,9 +96,7 @@ export type DeliveryEstimate = {
 // a grade tier badge + warranty term + outcome evidence.
 
 export type GradeTier =
-  | "oem_genuine"
-  | "premium_aftermarket"
-  | "value_aftermarket";
+  "oem_genuine" | "premium_aftermarket" | "value_aftermarket";
 
 export const GRADE_TIER_LABEL: Record<GradeTier, string> = {
   oem_genuine: "OEM Genuine",
@@ -244,11 +238,7 @@ export type QuoteRecord = {
 // ─── Orders & savings ledger ────────────────────────────────────────
 
 export type OrderStatus =
-  | "ordered"
-  | "shipped"
-  | "delivered"
-  | "installed"
-  | "exception";
+  "ordered" | "shipped" | "delivered" | "installed" | "exception";
 
 // ─── Delivery tracker (carrier milestones) ──────────────────────────
 
@@ -256,11 +246,7 @@ export type OrderStatus =
  * the tracker renders ONLY the stages its source can actually report;
  * stages are never interpolated or faked. */
 export type TrackerStage =
-  | "ordered"
-  | "confirmed"
-  | "in_transit"
-  | "out_for_delivery"
-  | "delivered";
+  "ordered" | "confirmed" | "in_transit" | "out_for_delivery" | "delivered";
 
 /** One verified carrier/supplier event. The ONLY thing tracker stages
  * derive from. */
@@ -370,10 +356,7 @@ export type ClaimReason =
   | "no_longer_needed";
 
 export type ClaimTrainsComponent =
-  | "matcher"
-  | "quality"
-  | "seller_carrier"
-  | "excluded";
+  "matcher" | "quality" | "seller_carrier" | "excluded";
 
 export const CLAIM_TRAINING_MAP: Record<ClaimReason, ClaimTrainsComponent> = {
   doesnt_fit: "matcher",

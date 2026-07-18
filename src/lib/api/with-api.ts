@@ -15,7 +15,7 @@ import { checkRateLimit } from "./rate-limit";
 
 type Handler = (
   req: NextRequest,
-  ctx: { session: string }
+  ctx: { session: string },
 ) => Promise<NextResponse> | NextResponse;
 
 export function withApi(handler: Handler) {
@@ -24,7 +24,7 @@ export function withApi(handler: Handler) {
     if (!session) {
       return NextResponse.json(
         { error: "Unauthorized. A session is required." },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -39,7 +39,7 @@ export function withApi(handler: Handler) {
             "Retry-After": String(Math.ceil(rl.resetMs / 1000)),
             "X-RateLimit-Remaining": "0",
           },
-        }
+        },
       );
     }
 
@@ -53,10 +53,12 @@ export function withApi(handler: Handler) {
       const isUpstream = message.startsWith("eBay ");
       return NextResponse.json(
         {
-          error: isUpstream ? "Upstream request failed" : "Internal server error",
+          error: isUpstream
+            ? "Upstream request failed"
+            : "Internal server error",
           detail: message,
         },
-        { status: isUpstream ? 502 : 500 }
+        { status: isUpstream ? 502 : 500 },
       );
     }
   };

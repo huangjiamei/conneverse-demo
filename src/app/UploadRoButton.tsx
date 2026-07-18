@@ -45,10 +45,17 @@ export default function UploadRoButton() {
       const res = await fetch("/api/upload-ro", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
-        setStatus({ kind: "error", message: data.error || `HTTP ${res.status}` });
+        setStatus({
+          kind: "error",
+          message: data.error || `HTTP ${res.status}`,
+        });
         return;
       }
-      setStatus({ kind: "success", result: data as UploadResult, fileName: file.name });
+      setStatus({
+        kind: "success",
+        result: data as UploadResult,
+        fileName: file.name,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setStatus({ kind: "error", message });
@@ -74,7 +81,9 @@ export default function UploadRoButton() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1A1A2E]">Upload RO</h2>
+              <h2 className="text-lg font-semibold text-[#1A1A2E]">
+                Upload RO
+              </h2>
               <button
                 onClick={close}
                 className="text-gray-400 hover:text-gray-600"
@@ -121,10 +130,25 @@ export default function UploadRoButton() {
                 <dl className="space-y-1.5 text-sm">
                   <Row label="Shops added" value={status.result.shops} />
                   <Row label="ROs added" value={status.result.ros} />
-                  <Row label="PartLines added" value={status.result.partLines} />
-                  <Row label="ROs already existed" value={status.result.existing} muted />
-                  <Row label="Service rows skipped" value={status.result.servicesSkipped} muted />
-                  <Row label="Invalid rows skipped" value={status.result.invalidSkipped} muted />
+                  <Row
+                    label="PartLines added"
+                    value={status.result.partLines}
+                  />
+                  <Row
+                    label="ROs already existed"
+                    value={status.result.existing}
+                    muted
+                  />
+                  <Row
+                    label="Service rows skipped"
+                    value={status.result.servicesSkipped}
+                    muted
+                  />
+                  <Row
+                    label="Invalid rows skipped"
+                    value={status.result.invalidSkipped}
+                    muted
+                  />
                 </dl>
                 <div className="mt-5 flex justify-end gap-2">
                   <button
@@ -177,7 +201,11 @@ function Row({
   return (
     <div className="flex justify-between">
       <dt className={muted ? "text-gray-500" : "text-gray-700"}>{label}</dt>
-      <dd className={muted ? "font-mono text-gray-500" : "font-mono text-[#1A1A2E]"}>
+      <dd
+        className={
+          muted ? "font-mono text-gray-500" : "font-mono text-[#1A1A2E]"
+        }
+      >
         {value}
       </dd>
     </div>

@@ -10,22 +10,46 @@ import type { GradeTier } from "@/types/canonical";
 
 // Brands treated as OEM-genuine or OE-supplier grade.
 const OEM_BRANDS = new Set([
-  "Toyota", "Honda", "Ford", "Chevrolet", "GM", "Motorcraft", "ACDelco",
-  "Mopar", "Denso", "Aisin", "Hyundai", "Subaru", "Nissan", "BMW",
+  "Toyota",
+  "Honda",
+  "Ford",
+  "Chevrolet",
+  "GM",
+  "Motorcraft",
+  "ACDelco",
+  "Mopar",
+  "Denso",
+  "Aisin",
+  "Hyundai",
+  "Subaru",
+  "Nissan",
+  "BMW",
   "Mercedes-Benz",
 ]);
 
 // Recognized premium aftermarket brands.
 const PREMIUM_BRANDS = new Set([
-  "Bosch", "Brembo", "Akebono", "MOOG", "Bilstein", "KYB", "NGK",
-  "Wagner", "Raybestos", "Gates", "Continental", "Centric", "Delphi",
-  "TYC", "Dayco",
+  "Bosch",
+  "Brembo",
+  "Akebono",
+  "MOOG",
+  "Bilstein",
+  "KYB",
+  "NGK",
+  "Wagner",
+  "Raybestos",
+  "Gates",
+  "Continental",
+  "Centric",
+  "Delphi",
+  "TYC",
+  "Dayco",
 ]);
 
 export function classifyGradeTier(
   brand: string | null,
   make: string | undefined,
-  condition: string
+  condition: string,
 ): GradeTier {
   // Used/refurbished parts never claim OEM-genuine tier.
   const isNew = condition === "new";

@@ -112,7 +112,7 @@ export function generateQuotePDF(data: QuoteData): void {
   doc.text(
     `Date: ${fmtDate(today)}    Valid until: ${fmtDate(validUntil)}`,
     marginL,
-    y + 40
+    y + 40,
   );
 
   // Right side
@@ -120,13 +120,13 @@ export function generateQuotePDF(data: QuoteData): void {
     `Customer: ${data.customerName || "\u2014"}`,
     pageW - marginR,
     y + 14,
-    { align: "right" }
+    { align: "right" },
   );
   doc.text(
     `Vehicle: ${data.vehicle.year} ${data.vehicle.make} ${data.vehicle.model}`,
     pageW - marginR,
     y + 28,
-    { align: "right" }
+    { align: "right" },
   );
 
   y += 52;
@@ -158,7 +158,7 @@ export function generateQuotePDF(data: QuoteData): void {
     "All Conneverse guarantees apply equally to both options.",
     marginL + contentW / 2,
     y + 32,
-    { align: "center" }
+    { align: "center" },
   );
 
   y += 50;
@@ -175,7 +175,7 @@ export function generateQuotePDF(data: QuoteData): void {
     w: number,
     color: [number, number, number],
     icon: string,
-    savingsAmt?: number
+    savingsAmt?: number,
   ): number {
     let cy = startY;
 
@@ -263,14 +263,14 @@ export function generateQuotePDF(data: QuoteData): void {
       `Labor (${data.laborHours}h \u00D7 $${data.shopConfig.laborRate}/hr): ${fmt(laborCost)}`,
       rightX,
       cy + 8,
-      { align: "right" }
+      { align: "right" },
     );
     cy += 12;
     doc.text(
       `Tax (${(data.shopConfig.taxRate * 100).toFixed(2)}%): ${fmt(taxAmt)}`,
       rightX,
       cy + 8,
-      { align: "right" }
+      { align: "right" },
     );
     cy += 14;
 
@@ -312,7 +312,7 @@ export function generateQuotePDF(data: QuoteData): void {
       boxW,
       TEAL,
       "\u23F1",
-      undefined
+      undefined,
     );
   }
 
@@ -325,7 +325,7 @@ export function generateQuotePDF(data: QuoteData): void {
       boxW,
       AMBER,
       "\uD83D\uDCC5",
-      data.optionB.savings
+      data.optionB.savings,
     );
     endY = Math.max(endY, endY2);
   }
@@ -350,7 +350,7 @@ export function generateQuotePDF(data: QuoteData): void {
       "Both options are quality-verified. Please check your preferred option and return this quote to the shop.",
       marginL + contentW / 2,
       y + 8,
-      { align: "center" }
+      { align: "center" },
     );
     y += 20;
   }
@@ -365,12 +365,12 @@ export function generateQuotePDF(data: QuoteData): void {
   doc.text(
     `Prices are locked for 48 hours from quote date. Conneverse guarantees fitment for ${data.vehicle.year} ${data.vehicle.make} ${data.vehicle.model}.`,
     marginL + 8,
-    y + 14
+    y + 14,
   );
   doc.text(
     "30-day returns on all parts. If delivery is late, Conneverse absorbs the cost.",
     marginL + 8,
-    y + 26
+    y + 26,
   );
 
   y += 44;
@@ -387,14 +387,11 @@ export function generateQuotePDF(data: QuoteData): void {
   doc.text(
     "Powered by Conneverse \u2014 AI-Powered Parts Procurement  \u00B7  conneverse.ai",
     marginL,
-    y + 6
-  );
-  doc.text(
-    `Quote valid 7 days \u00B7 ${quoteNum}`,
-    pageW - marginR,
     y + 6,
-    { align: "right" }
   );
+  doc.text(`Quote valid 7 days \u00B7 ${quoteNum}`, pageW - marginR, y + 6, {
+    align: "right",
+  });
 
   // Save
   const filename = `quote-${data.vehicle.make.toLowerCase()}-${data.vehicle.model.toLowerCase().replace(/\s+/g, "-")}-${today.toISOString().slice(0, 10).replace(/-/g, "")}.pdf`;

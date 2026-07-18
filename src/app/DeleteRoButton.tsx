@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Props = {
-  partLineId: string;
-  partDescription: string;
+  roId: string;
+  cccRoNumber: string;
+  vehicleLabel: string;
 };
 
-export default function DeletePartLineButton({
-  partLineId,
-  partDescription,
+export default function DeleteRoButton({
+  roId,
+  cccRoNumber,
+  vehicleLabel,
 }: Props) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -21,7 +23,7 @@ export default function DeletePartLineButton({
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/part-lines/${partLineId}`, {
+      const res = await fetch(`/api/repair-orders/${roId}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -30,7 +32,6 @@ export default function DeletePartLineButton({
         setDeleting(false);
         return;
       }
-      // 成功: 关掉 dialog 并刷新页面
       setConfirming(false);
       router.refresh();
     } catch (err) {
@@ -48,7 +49,8 @@ export default function DeletePartLineButton({
           setConfirming(true);
         }}
         className="absolute top-2 right-2 z-10 text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Delete part line"
+        aria-label="Delete repair order"
+        title="Delete repair order"
       >
         ✕
       </button>
@@ -67,14 +69,14 @@ export default function DeletePartLineButton({
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-2 text-lg font-semibold text-[#1A1A2E]">
-              Delete this part line?
+              Delete this repair order?
             </h2>
             <p className="mb-1 text-sm text-gray-600">
-              This cannot be undone. Any prior searches and candidates for this
-              part will also be removed.
+              This cannot be undone. All part lines, searches, and candidates
+              under this RO will be removed.
             </p>
             <p className="mb-4 text-sm font-medium text-[#1A1A2E]">
-              {partDescription}
+              RO #{cccRoNumber} · {vehicleLabel}
             </p>
 
             {error && (

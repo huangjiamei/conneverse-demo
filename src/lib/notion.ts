@@ -31,10 +31,12 @@ type NotionProp = Record<string, unknown>;
 function plainText(prop: NotionProp | undefined): string {
   if (!prop) return "";
   const arr = (prop.title ?? prop.rich_text) as
-    | { plain_text?: string }[]
-    | undefined;
+    { plain_text?: string }[] | undefined;
   if (!Array.isArray(arr)) return "";
-  return arr.map((t) => t.plain_text ?? "").join("").trim();
+  return arr
+    .map((t) => t.plain_text ?? "")
+    .join("")
+    .trim();
 }
 
 function selectName(prop: NotionProp | undefined): string {
@@ -93,19 +95,16 @@ export async function fetchNotionTasks(): Promise<NotionSyncResult | null> {
   const dbId = process.env.NOTION_TASKS_DB_ID || DEFAULT_DB_ID;
   if (!token) return null;
 
-  const res = await fetch(
-    `https://api.notion.com/v1/databases/${dbId}/query`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Notion-Version": NOTION_VERSION,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ page_size: 100 }),
-      cache: "no-store",
+  const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({ page_size: 100 }),
+    cache: "no-store",
+  });
 
   if (!res.ok) {
     throw new Error(`Notion API ${res.status}: ${await res.text()}`);

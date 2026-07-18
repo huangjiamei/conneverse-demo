@@ -3,6 +3,7 @@
 Extract every link from a PDF and download what each one points to.
 
 It collects **both**:
+
 - **Embedded hyperlinks** — clickable link annotations in the PDF.
 - **URLs in the text** — plain `http(s)://` URLs written out in the visible text.
 

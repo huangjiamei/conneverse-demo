@@ -5,7 +5,11 @@ import * as XLSX from "xlsx";
 // 解析工具函数
 // ============================================================
 
-function parseVehicle(raw: string): { year: number | null; make: string; model: string } {
+function parseVehicle(raw: string): {
+  year: number | null;
+  make: string;
+  model: string;
+} {
   const trimmed = (raw || "").trim();
   const parts = trimmed.split(/\s+/);
   if (parts.length < 3) return { year: null, make: "", model: "" };
@@ -62,12 +66,12 @@ const EXCLUDED_TYPES = new Set(["Other", "Sublet"]);
 // ============================================================
 
 export interface ImportRoResult {
-  shops: number;          // 新建的 Shop 数
-  ros: number;            // 新建的 RO 数
-  partLines: number;      // 新建的 PartLine 数
-  existing: number;       // 已存在(命中)的 RO 数, 走了 skip
+  shops: number; // 新建的 Shop 数
+  ros: number; // 新建的 RO 数
+  partLines: number; // 新建的 PartLine 数
+  existing: number; // 已存在(命中)的 RO 数, 走了 skip
   servicesSkipped: number; // Other / Sublet 类跳过数
-  invalidSkipped: number;  // 字段缺失/格式错误跳过数
+  invalidSkipped: number; // 字段缺失/格式错误跳过数
 }
 
 // ============================================================

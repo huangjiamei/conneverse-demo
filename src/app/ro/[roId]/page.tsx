@@ -78,10 +78,10 @@ export default async function RoDetailPage({
                 href={`/ro/${ro.id}/search/${pl.id}`}
                 className="relative block bg-white border border-gray-200 rounded-lg p-4 hover:border-[#00B4A6] hover:shadow-sm transition group"
               >
-              <DeletePartLineButton
-    partLineId={pl.id}
-    partDescription={pl.partDescription}
-  />
+                <DeletePartLineButton
+                  partLineId={pl.id}
+                  partDescription={pl.partDescription}
+                />
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -107,16 +107,28 @@ export default async function RoDetailPage({
                         </span>
                       )}
                     </div>
+                    {pl.partDescriptionRaw &&
+                      pl.partDescriptionRaw !== pl.partDescription && (
+                        <div className="mt-0.5 text-[11px] text-gray-400 italic">
+                          Original: {pl.partDescriptionRaw}
+                        </div>
+                      )}
 
                     {pl.partNumber && (
                       <div className="mt-0.5 text-xs text-gray-500 font-mono">
                         {pl.partNumber}
                       </div>
                     )}
+                    {pl.partNumberRaw && pl.partNumberRaw !== pl.partNumber && (
+                      <div className="mt-0.5 text-[11px] text-gray-400 italic font-mono">
+                        Original: {pl.partNumberRaw}
+                      </div>
+                    )}
 
                     {pl.historicalPurchase?.actualCost && (
                       <div className="mt-1.5 text-[11px] text-gray-400">
-                        Historically paid ${String(pl.historicalPurchase.actualCost)}
+                        Historically paid $
+                        {String(pl.historicalPurchase.actualCost)}
                         {pl.historicalPurchase.vendorName &&
                           ` at ${pl.historicalPurchase.vendorName}`}
                       </div>

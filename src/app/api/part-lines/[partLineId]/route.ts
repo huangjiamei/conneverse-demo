@@ -9,7 +9,7 @@ type Body = {
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ partLineId: string }> }
+  { params }: { params: Promise<{ partLineId: string }> },
 ) {
   const { partLineId } = await params;
 
@@ -45,14 +45,14 @@ export async function PATCH(
   } catch {
     return NextResponse.json(
       { error: `PartLine not found: ${partLineId}` },
-      { status: 404 }
+      { status: 404 },
     );
   }
 }
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: Promise<{ partLineId: string }> }
+  { params }: { params: Promise<{ partLineId: string }> },
 ) {
   const { partLineId } = await params;
 
@@ -67,16 +67,15 @@ export async function DELETE(
       if (err.code === "P2025") {
         return NextResponse.json(
           { error: `PartLine not found: ${partLineId}` },
-          { status: 404 }
+          { status: 404 },
         );
       }
       if (err.code === "P2003") {
         return NextResponse.json(
           {
-            error:
-              "This part line has purchase orders and cannot be deleted.",
+            error: "This part line has purchase orders and cannot be deleted.",
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
     }
