@@ -77,7 +77,7 @@ export default async function SearchPage({
                   optimizerRank: c.optimizerRank,
                   optimizerTotal: c.optimizerTotal,
                   optimizerPriceScore: c.optimizerPriceScore,
-                  optimizerQualityScore: c.optimizerQualityScor,
+                  optimizerQualityScore: c.optimizerQualityScore,
                   optimizerGateReason: c.optimizerGateReason,
                 })),
               }
