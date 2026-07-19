@@ -453,7 +453,7 @@ export default function SearchClient({
               No verified matches. Try adjusting the description or part number.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 auto-rows-fr">
               {verified.map((c) => (
                 <CandidateCard key={c.id} candidate={c} />
               ))}
@@ -473,7 +473,7 @@ export default function SearchClient({
                 {showFiltered ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
               {showFiltered && (
-                <div className="mt-2 space-y-2">
+                <div className="mt-2 grid gap-3 auto-rows-fr">
                   {others.map((c) => (
                     <CandidateCard key={c.id} candidate={c} />
                   ))}
@@ -513,7 +513,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
   return (
     <div
-      className={`bg-white border rounded-lg transition ${
+      className={`relative h-full min-h-[180px] flex flex-col bg-white border rounded-lg transition ${
         isTopPick
           ? "border-teal-400 shadow-md ring-1 ring-teal-100"
           : isVerifiedMatch
@@ -521,27 +521,29 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
           : "border-gray-200"
       }`}
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-4">
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="flex-1 flex items-stretch justify-between gap-4">
           {candidate.imageUrl && (
             <a
               href={candidate.itemUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0"
+              /* self-stretch + flex: 让 <a> 撑满行高,内部 img 的 h-full 才有参照 */
+              className="flex-shrink-0 self-stretch flex"
               onClick={(e) => e.stopPropagation()}
             >
               <Image
                 src={candidate.imageUrl}
                 alt={candidate.title}
-                width={60}
-                height={60}
-                className="w-[60px] h-[60px] object-cover rounded border border-gray-100"
+                width={200}
+                height={200}
+                className="w-[150px] h-full object-cover rounded border border-gray-100"
               />
             </a>
           )}
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 flex flex-col">
+            {/* 上: fitment / rank 徽章,置顶 */}
             <div className="flex items-center gap-2 flex-wrap">
                {/* 1. Fitment 标签: Verified / Uncertain / Rejected */}
   {isVerifiedMatch && (
@@ -567,6 +569,14 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
       Rank {candidate.optimizerRank}
     </span>
   )}
+  {isRanked && candidate.optimizerTotal != null && (
+    <span
+      className="text-[10px] text-gray-400"
+      title={`price: ${candidate.optimizerPriceScore?.toFixed(0)} | quality: ${candidate.optimizerQualityScore?.toFixed(0)}`}
+    >
+      Score {candidate.optimizerTotal.toFixed(0)}
+    </span>
+  )}
 
   {/* 4. Verified 后接 Filter reason (被 gate 拒的情况) */}
   {isVerifiedMatch && isGated && (
@@ -587,6 +597,8 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               )}
             </div>
 
+            {/* 中: 品牌 / 标题 / 属性,flex-1 吃满剩余高度并垂直居中 */}
+            <div className="flex-1 flex flex-col justify-center">
             {candidate.brand && (
               <div className="mt-1 text-xs font-medium text-gray-600">
                 {candidate.brand}
@@ -626,7 +638,9 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
                 </span>
               )}
             </div>
+            </div>
 
+            {/* 下: View on eBay / Score / More,置底 */}
             <div className="mt-2 flex items-center gap-3">
               <a
                 href={candidate.itemUrl}
@@ -636,48 +650,48 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               >
                 View on eBay <ExternalLink size={10} />
               </a>
-              {isRanked && candidate.optimizerTotal != null && (
-                <span
-                  className="text-[10px] text-gray-400"
-                  title={`price: ${candidate.optimizerPriceScore?.toFixed(0)} | quality: ${candidate.optimizerQualityScore?.toFixed(0)}`}
-                >
-                  Score {candidate.optimizerTotal.toFixed(0)}
-                </span>
-              )}
-              <button
-                onClick={() => setExpanded(!expanded)}
-                className="inline-flex items-center gap-0.5 text-[11px] text-gray-400 hover:text-[#00B4A6] transition ml-auto"
-              >
-                {expanded ? (
-                  <>
-                    Less <ChevronUp size={11} />
-                  </>
-                ) : (
-                  <>
-                    More <ChevronDown size={11} />
-                  </>
-                )}
-              </button>
             </div>
           </div>
 
-          <div className="flex-shrink-0 text-right">
-            <div className="text-lg font-semibold text-[#1A1A2E]">
-              ${candidate.price}
+          {/* 右列: 价格置顶, More 置底 —— 与价格同一条右边线对齐 */}
+          <div className="flex-shrink-0 flex flex-col items-end justify-between text-right">
+            <div>
+              <div className="text-lg font-semibold text-[#1A1A2E]">
+                ${candidate.price}
+              </div>
+              <button
+                disabled
+                title="Ordering coming soon"
+                className="mt-1 text-[11px] text-gray-400 hover:text-gray-500 cursor-not-allowed"
+              >
+                Order (soon)
+              </button>
             </div>
             <button
-              disabled
-              title="Ordering coming soon"
-              className="mt-1 text-[11px] text-gray-400 hover:text-gray-500 cursor-not-allowed"
+              onClick={() => setExpanded(!expanded)}
+              className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-gray-400 hover:text-[#00B4A6] transition"
             >
-              Order (soon)
+              {expanded ? (
+                <>
+                  Less <ChevronUp size={11} />
+                </>
+              ) : (
+                <>
+                  More <ChevronDown size={11} />
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
 
+      {/*
+        展开面板做成浮层 (absolute + top-full),不占据卡片高度。
+        否则 grid 的 items-stretch 会把同一行其他卡片一起拉高,
+        看起来像"所有卡片都展开了"。
+      */}
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-600 space-y-2">
+        <div className="absolute left-0 right-0 top-full z-20 -mt-px rounded-b-lg border border-gray-200 bg-gray-50 shadow-lg px-4 py-3 text-xs text-gray-600 space-y-2 max-h-[320px] overflow-y-auto">
           {candidate.compatibility && Object.keys(candidate.compatibility).length > 0 && (
             <div>
               <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">

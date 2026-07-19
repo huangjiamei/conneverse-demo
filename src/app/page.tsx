@@ -34,7 +34,7 @@ export default async function HomePage() {
   }));
 
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-[1440px] mx-auto p-8">
       <div className="mb-6 flex flex-row items-start justify-between">
         <div className="flex flex-col">
           <h1 className="text-2xl font-semibold">Repair Orders</h1>

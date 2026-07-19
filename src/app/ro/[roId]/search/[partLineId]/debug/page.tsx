@@ -47,7 +47,7 @@ export default async function DebugPage({
 
   if (!latestSearch) {
     return (
-      <main className="max-w-5xl mx-auto p-8">
+      <main className="w-full max-w-[1440px] mx-auto p-8">
         <Link
           href={`/ro/${roId}/search/${partLineId}`}
           className="text-sm text-gray-500 hover:text-gray-700 transition inline-flex items-center gap-1"
@@ -97,7 +97,7 @@ export default async function DebugPage({
   ).length;
 
   return (
-    <main className="max-w-5xl mx-auto p-8">
+    <main className="max-w-[1440px] mx-auto p-8">
       <Link
         href={`/ro/${roId}/search/${partLineId}`}
         className="text-sm text-gray-500 hover:text-gray-700 transition inline-flex items-center gap-1"

@@ -68,7 +68,7 @@ export default async function SearchPage({
   }
 
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="w-full max-w-[1440px] mx-auto p-8">
       <Link
         href={`/ro/${roId}`}
         className="text-sm text-gray-500 hover:text-gray-700 transition inline-flex items-center gap-1"
