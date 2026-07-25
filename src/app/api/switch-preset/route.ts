@@ -273,10 +273,14 @@ export async function POST(req: Request) {
   );
 
   // 3. 更新 PartLine.selectedPreset (记住偏好)
-  await prisma.partLine.update({
-    where: { id: matchSearch.partLineId },
-    data: { selectedPreset: preset },
-  });
+  //    独立搜索 (/search) 的 MatchSearch 没有 partLine, partLineId=null,
+  //    这时跳过 —— 偏好只存在前端 state, 无处落库。
+  if (matchSearch.partLineId) {
+    await prisma.partLine.update({
+      where: { id: matchSearch.partLineId },
+      data: { selectedPreset: preset },
+    });
+  }
 
   // 4. 拿最新 candidates 排序返回
   const updated = await prisma.matchSearch.findUnique({

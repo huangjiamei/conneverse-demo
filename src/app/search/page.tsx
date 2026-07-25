@@ -6,6 +6,7 @@
  */
 
 import VehicleSearchClient from "./VehicleSearchClient";
+import QuoteBuilder from "@/components/QuoteBuilder";
 
 export const metadata = {
   title: "New search — Conneverse",
@@ -13,8 +14,16 @@ export const metadata = {
 
 export default function VehicleSearchPage() {
   return (
-    <main className="max-w-[1440px] mx-auto p-8">
-      <VehicleSearchClient />
+    <main className="w-full max-w-[1280px] mx-auto p-6">
+      {/* 左主内容 + 右侧 320px Quote Builder 侧栏。<lg 时侧栏掉到下方 */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="flex-1 min-w-0 w-full">
+          <VehicleSearchClient />
+        </div>
+        <div className="w-full lg:w-[320px] flex-shrink-0">
+          <QuoteBuilder />
+        </div>
+      </div>
     </main>
   );
 }

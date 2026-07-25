@@ -18,13 +18,20 @@ import { prisma } from "@/lib/prisma";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
-// 默认 preset —— 本页暂不做 preset 选择器, 后续再加。
+// 未传 preset 时的兜底。前端 (Job Status 胶囊) 现在会显式传 preset。
 const DEFAULT_PRESET = "sameDayJob";
+const VALID_PRESETS = new Set([
+  "sameDayJob",
+  "costFirst",
+  "qualityFirst",
+  "scheduled",
+]);
 
 type Body = {
   vehicleId?: number;
   partDescription?: string;
   partNumber?: string | null;
+  preset?: string;
 };
 
 type MatcherOptimizerFields = {
@@ -94,6 +101,11 @@ export async function POST(req: Request) {
     );
   }
 
+  // preset: 只接受已知值, 否则回落默认 (防止透传乱字符串给 matcher)
+  const preset = VALID_PRESETS.has(body.preset ?? "")
+    ? (body.preset as string)
+    : DEFAULT_PRESET;
+
   // vehicleId → 年份 / 品牌 / 车型 / 子型号
   const vehicle = await prisma.vcdbVehicle.findUnique({
     where: { id: vehicleId! },
@@ -141,7 +153,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         source_part_info: sourcePartInfo,
         use_llm: false,
-        preset: DEFAULT_PRESET,
+        preset,
       }),
     });
   } catch (err) {
@@ -191,38 +203,79 @@ export async function POST(req: Request) {
     optimizerByItemId.set(r.item_id, { gateReason: r.reason });
   }
 
-  // 组装前端候选形状 (id 用 ebayItemId, 因为不落库没有 Candidate.id)
-  const shaped = candidates.map((c, idx) => {
-    const itemId = c.item_id ?? `idx-${idx}`;
-    const opt = optimizerByItemId.get(c.item_id ?? "") || {};
+  // 透传 lookup (brand / enrichedFields / compatibility / additionalImages)
+  const enrichedByItemId = new Map<string, MatcherOptimizerFields>();
+  const brandByItemId = new Map<string, string>();
+  const compatByItemId = new Map<string, Record<string, unknown>>();
+  const additionalImagesByItemId = new Map<string, string[]>();
+  for (const c of candidates) {
+    if (!c.item_id) continue;
+    if (c.optimizer_fields) enrichedByItemId.set(c.item_id, c.optimizer_fields);
     const compat = c.compatibility || {};
-    const brand = (compat.Brand as string) || (compat.Make as string) || null;
-    return {
-      id: itemId,
-      rank: idx + 1,
-      title: c.title ?? "",
-      price: c.price?.value ? c.price.value : "0",
-      currency: c.price?.currency ?? "USD",
-      itemUrl: c.item_web_url ?? "",
-      imageUrl: c.image_url ?? null,
-      condition: c.condition ?? null,
-      candidateLabel: c.candidate_label ?? null,
-      labelSource: c.candidate_label_source ?? null,
-      ebayItemId: itemId,
-      optimizerRank: opt.rank ?? null,
-      optimizerTotal: opt.total ?? null,
-      optimizerPriceScore: opt.priceScore ?? null,
-      optimizerQualityScore: opt.qualityScore ?? null,
-      optimizerGateReason: opt.gateReason ?? null,
-      brand,
-      enrichedFields: c.optimizer_fields ?? null,
-      compatibility: compat,
-      additionalImageUrls: c.additional_image_urls ?? [],
-    };
+    const brand = (compat.Brand as string) || (compat.Make as string) || "";
+    if (brand) brandByItemId.set(c.item_id, brand);
+    compatByItemId.set(c.item_id, compat);
+    if (c.additional_image_urls?.length) {
+      additionalImagesByItemId.set(c.item_id, c.additional_image_urls);
+    }
+  }
+
+  // 落库: 独立搜索的 MatchSearch, partLineId=null。
+  // 复用与 /api/search 完全相同的 MatchSearch + Candidate + OptimizerResult 三段式。
+  const matchSearch = await prisma.matchSearch.create({
+    data: {
+      partLineId: null, // ← 独立搜索, 不挂 PartLine
+      queryVehicleYear: yearId,
+      queryVehicleMake: makeName,
+      queryVehicleModel: modelName,
+      queryPartDescription: partDescription!,
+      queryPartNumber: partNumber ?? null,
+      matcherLabel: matcherData.label ?? null,
+      labelSource: matcherData.label_source ?? null,
+      candidateCount: candidates.length,
+      rawResponse: matcherData as object,
+      candidates: {
+        create: candidates.map((c, idx) => {
+          const opt = optimizerByItemId.get(c.item_id ?? "") || {};
+          return {
+            rank: idx + 1,
+            ebayItemId: c.item_id ?? "",
+            title: c.title ?? "",
+            price: c.price?.value ? c.price.value : "0",
+            currency: c.price?.currency ?? "USD",
+            itemUrl: c.item_web_url ?? "",
+            imageUrl: c.image_url ?? null,
+            condition: c.condition ?? null,
+            candidateLabel: c.candidate_label ?? null,
+            labelSource: c.candidate_label_source ?? null,
+            optimizerRank: opt.rank ?? null,
+            optimizerTotal: opt.total ?? null,
+            optimizerPriceScore: opt.priceScore ?? null,
+            optimizerQualityScore: opt.qualityScore ?? null,
+            optimizerGateReason: opt.gateReason ?? null,
+          };
+        }),
+      },
+    },
+    include: { candidates: true },
   });
 
-  // 排序: 有 optimizerRank 的在前, 其余按 matcher 原序
-  const sorted = [...shaped].sort((a, b) => {
+  // 缓存当前 preset 的 optimizer 结果 (切 preset 时命中就不用重跑 matcher)
+  await prisma.optimizerResult.createMany({
+    data: matchSearch.candidates.map((c) => ({
+      candidateId: c.id,
+      matchSearchId: matchSearch.id,
+      preset,
+      rank: c.optimizerRank,
+      total: c.optimizerTotal,
+      priceScore: c.optimizerPriceScore,
+      qualityScore: c.optimizerQualityScore,
+      gateReason: c.optimizerGateReason,
+    })),
+  });
+
+  // 排序: 有 optimizerRank 的在前, 其余按 matcher 原序 (用 DB 落库后的 candidate)
+  const sorted = [...matchSearch.candidates].sort((a, b) => {
     const ar = a.optimizerRank;
     const br = b.optimizerRank;
     if (ar != null && br != null) return ar - br;
@@ -232,16 +285,38 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({
+    matchSearchId: matchSearch.id, // ← 前端存起来, 切 preset 用
     label: matcherData.label ?? null,
     labelSource: matcherData.label_source ?? null,
     candidateCount: candidates.length,
-    preset: DEFAULT_PRESET,
+    preset,
     optimizerMeta: {
-      preset: optimizerResult?.preset_used ?? DEFAULT_PRESET,
+      preset: optimizerResult?.preset_used ?? preset,
       eligibleCount: optimizerResult?.meta?.total_eligible ?? 0,
       rejectedCount: optimizerResult?.meta?.total_rejected ?? 0,
     },
-    candidates: sorted,
+    candidates: sorted.map((c) => ({
+      id: c.id, // ← DB Candidate.id, 与 switch-preset 返回的一致
+      rank: c.rank,
+      title: c.title,
+      price: String(c.price),
+      currency: c.currency,
+      itemUrl: c.itemUrl,
+      imageUrl: c.imageUrl,
+      condition: c.condition,
+      candidateLabel: c.candidateLabel,
+      labelSource: c.labelSource,
+      ebayItemId: c.ebayItemId,
+      optimizerRank: c.optimizerRank,
+      optimizerTotal: c.optimizerTotal,
+      optimizerPriceScore: c.optimizerPriceScore,
+      optimizerQualityScore: c.optimizerQualityScore,
+      optimizerGateReason: c.optimizerGateReason,
+      brand: brandByItemId.get(c.ebayItemId) ?? null,
+      enrichedFields: enrichedByItemId.get(c.ebayItemId) ?? null,
+      compatibility: compatByItemId.get(c.ebayItemId) ?? null,
+      additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
+    })),
     query: sourcePartInfo,
   });
 }

@@ -114,8 +114,9 @@ model MatchSearch {
   id                    String       @id @default(cuid())
   createdAt             DateTime     @default(now())
 
-  partLineId            String
-  partLine              PartLine     @relation(fields: [partLineId], references: [id], onDelete: Cascade)
+  // 可空: 独立搜索 (/search) 落库时 partLineId=null, 不挂在任何 PartLine 上
+  partLineId            String?
+  partLine              PartLine?    @relation(fields: [partLineId], references: [id], onDelete: Cascade)
 
   // 搜索时用的输入快照(可能跟 partLine 当前值不一样,如果用户之后又改了)
   queryVehicleYear      Int

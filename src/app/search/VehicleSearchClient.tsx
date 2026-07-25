@@ -10,14 +10,25 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import {
+  Loader2, Search, Wrench, DollarSign, Award, Calendar,
+} from "lucide-react";
 import { CandidateCard, type Candidate } from "@/components/CandidateCard";
+
+// Job Status preset 胶囊 —— key 与 matcher 的 preset 对齐
+const PRESET_OPTIONS = [
+  { key: "sameDayJob", label: "Car on lift", Icon: Wrench },
+  { key: "costFirst", label: "Cost first", Icon: DollarSign },
+  { key: "qualityFirst", label: "Quality first", Icon: Award },
+  { key: "scheduled", label: "Scheduled", Icon: Calendar },
+] as const;
 
 type YearOpt = { id: number };
 type NamedOpt = { id: number; name: string };
 type SubModelOpt = { id: number; name: string; baseVehicleId: number; vehicleId: number };
 
 type SearchResponse = {
+  matchSearchId?: string;
   label: number | null;
   labelSource: string | null;
   candidateCount: number;
@@ -45,11 +56,16 @@ export default function VehicleSearchClient() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingSubmodels, setLoadingSubmodels] = useState(false);
 
+  // Job Status preset (默认 sameDayJob)
+  const [preset, setPreset] = useState<string>("sameDayJob");
+  const [switchingPreset, setSwitchingPreset] = useState<string | null>(null);
+
   // 零件信息 + 搜索
   const [partDescription, setPartDescription] = useState("");
   const [partNumber, setPartNumber] = useState("");
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<SearchResponse | null>(null);
+  const [matchSearchId, setMatchSearchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Year 预取
@@ -126,17 +142,60 @@ export default function VehicleSearchClient() {
           vehicleId: submodel.vehicleId,
           partDescription,
           partNumber: partNumber || null,
+          preset,
         }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error || `Search failed: HTTP ${res.status}`);
       }
-      setResult(await res.json());
+      const data: SearchResponse = await res.json();
+      setResult(data);
+      setMatchSearchId(data.matchSearchId ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setSearching(false);
+    }
+  }
+
+  // 切 Job Status 胶囊:
+  //   - 还没搜过 → 只更新前端 preset state (下次搜索用新 preset)
+  //   - 已有结果 → 调 /api/switch-preset 重排 (命中缓存就不用重跑 matcher)
+  async function handlePresetSwitch(newPreset: string) {
+    if (newPreset === preset) return;
+    setPreset(newPreset); // optimistic
+
+    if (!matchSearchId) return;
+
+    setError(null);
+    setSwitchingPreset(newPreset);
+    try {
+      const res = await fetch("/api/switch-preset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchSearchId, preset: newPreset }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `Switch failed: HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              candidateCount: data.candidateCount,
+              candidates: data.candidates,
+              optimizerMeta: data.optimizerMeta,
+              preset: newPreset,
+            }
+          : prev
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Switch failed");
+    } finally {
+      setSwitchingPreset(null);
     }
   }
 
@@ -201,6 +260,39 @@ export default function VehicleSearchClient() {
         {/* 选完四层才显示零件输入 */}
         {vehicleSelected && (
           <div className="mt-6 pt-6 border-t border-gray-100 space-y-4">
+            {/* Job Status preset 胶囊行 */}
+            <div>
+              <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+                Job status
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {PRESET_OPTIONS.map(({ key, label, Icon }) => {
+                  const selected = preset === key;
+                  const loading = switchingPreset === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handlePresetSwitch(key)}
+                      disabled={switchingPreset != null}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[13px] transition disabled:opacity-60 ${
+                        selected
+                          ? "bg-teal-50 border-[#00B4A6] text-[#00B4A6]"
+                          : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
+                    >
+                      {loading ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Icon size={12} />
+                      )}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
