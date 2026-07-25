@@ -59,6 +59,8 @@ export type Candidate = {
   enrichedFields: EnrichedFields | null;
   compatibility: Record<string, unknown> | null;
   additionalImageUrls: string[];
+  // 该候选在哪些 preset 下是 Rank 1 (从 OptimizerResult 表算)。用于 pick tag。
+  pickInPresets?: string[];
 };
 
 // ============================================================
@@ -74,7 +76,7 @@ function daysFromNow(iso: string | null | undefined): number | null {
   return Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
 }
 
-function formatDeliveryRange(min: string | null | undefined, max: string | null | undefined): string | null {
+export function formatDeliveryRange(min: string | null | undefined, max: string | null | undefined): string | null {
   const mn = daysFromNow(min);
   const mx = daysFromNow(max);
   if (mn == null && mx == null) return null;
@@ -85,12 +87,21 @@ function formatDeliveryRange(min: string | null | undefined, max: string | null 
   return `~${mn ?? mx}d`;
 }
 
-function formatWarranty(raw: string | null | undefined): string | null {
+export function formatWarranty(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
   if (/lifetime/i.test(v)) return "Lifetime";
   return v;
+}
+
+// seller_feedback_pct 可能是 number 或 string, 统一成 number|null
+export function parseSellerPct(
+  v: string | number | null | undefined
+): number | null {
+  if (typeof v === "number") return v;
+  if (v) return Number(v);
+  return null;
 }
 
 // ============================================================
@@ -297,88 +308,103 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
         看起来像"所有卡片都展开了"。
       */}
       {expanded && (
-        <div className="absolute left-0 right-0 top-full z-20 -mt-px rounded-b-lg border border-gray-200 bg-gray-50 shadow-lg px-4 py-3 text-xs text-gray-600 space-y-2 max-h-[320px] overflow-y-auto">
-          {candidate.compatibility && Object.keys(candidate.compatibility).length > 0 && (
-            <div>
-              <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-                Compatibility
-              </div>
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                {Object.entries(candidate.compatibility)
-                  .filter(([k]) => k !== "categoryPath")
-                  .map(([k, v]) => (
-                    <div key={k}>
-                      <span className="text-gray-400">{k}:</span> {String(v)}
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
+        <div className="absolute left-0 right-0 top-full z-20 -mt-px rounded-b-lg border border-gray-200 bg-gray-50 shadow-lg px-4 py-3 max-h-[320px] overflow-y-auto">
+          <CandidateDetail candidate={candidate} />
+        </div>
+      )}
+    </div>
+  );
+}
 
-          {ef.seller_username && (
-            <div>
-              <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-                Seller
-              </div>
-              <div>
-                {ef.seller_username}
-                {sellerPct != null && ` · ${sellerPct.toFixed(1)}% positive`}
-                {sellerCount != null && ` (${sellerCount.toLocaleString()} feedback)`}
-              </div>
-            </div>
-          )}
+// ============================================================
+// CandidateDetail —— 候选展开详情 (compatibility / seller / returns / photos)
+// 抽出来共享: CandidateCard 的浮层展开区 + /search 表格的展开行都用它。
+// 自包含 (从 candidate 自己算 ef / sellerPct / sellerCount)。
+// ============================================================
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {ef.returns_accepted != null && (
-              <div className="inline-flex items-center gap-1">
-                <RotateCcw size={11} />
-                Returns:{" "}
-                {ef.returns_accepted
-                  ? `accepted (${ef.return_period_days ?? "?"}d)`
-                  : "not accepted"}
-              </div>
-            )}
-            {ef.sold_qty != null && ef.sold_qty > 0 && (
-              <div className="inline-flex items-center gap-1">
-                <Package size={11} />
-                {ef.sold_qty.toLocaleString()} sold
-              </div>
-            )}
-            {ef.available_qty != null && (
-              <div>Stock: {ef.available_qty}</div>
-            )}
-            {ef.shipping_cost != null && Number(ef.shipping_cost) > 0 && (
-              <div>Shipping: ${Number(ef.shipping_cost).toFixed(2)}</div>
-            )}
+export function CandidateDetail({ candidate }: { candidate: Candidate }) {
+  const ef = candidate.enrichedFields || {};
+  const sellerPct = parseSellerPct(ef.seller_feedback_pct);
+  const sellerCount = ef.seller_feedback_count ?? null;
+
+  return (
+    <div className="text-xs text-gray-600 space-y-2">
+      {candidate.compatibility && Object.keys(candidate.compatibility).length > 0 && (
+        <div>
+          <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
+            Compatibility
           </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+            {Object.entries(candidate.compatibility)
+              .filter(([k]) => k !== "categoryPath")
+              .map(([k, v]) => (
+                <div key={k}>
+                  <span className="text-gray-400">{k}:</span> {String(v)}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
-          {candidate.additionalImageUrls.length > 0 && (
-            <div>
-              <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-                More photos
-              </div>
-              <div className="flex gap-1.5">
-                {candidate.additionalImageUrls.map((url, i) => (
-                  <a
-                    key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block"
-                  >
-                    <Image
-                      src={url}
-                      alt={`${candidate.title} ${i + 2}`}
-                      width={80}
-                      height={80}
-                      className="w-[80px] h-[80px] object-cover rounded border border-gray-100"
-                    />
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
+      {ef.seller_username && (
+        <div>
+          <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
+            Seller
+          </div>
+          <div>
+            {ef.seller_username}
+            {sellerPct != null && ` · ${sellerPct.toFixed(1)}% positive`}
+            {sellerCount != null && ` (${sellerCount.toLocaleString()} feedback)`}
+          </div>
+        </div>
+      )}
 
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {ef.returns_accepted != null && (
+          <div className="inline-flex items-center gap-1">
+            <RotateCcw size={11} />
+            Returns:{" "}
+            {ef.returns_accepted
+              ? `accepted (${ef.return_period_days ?? "?"}d)`
+              : "not accepted"}
+          </div>
+        )}
+        {ef.sold_qty != null && ef.sold_qty > 0 && (
+          <div className="inline-flex items-center gap-1">
+            <Package size={11} />
+            {ef.sold_qty.toLocaleString()} sold
+          </div>
+        )}
+        {ef.available_qty != null && <div>Stock: {ef.available_qty}</div>}
+        {ef.shipping_cost != null && Number(ef.shipping_cost) > 0 && (
+          <div>Shipping: ${Number(ef.shipping_cost).toFixed(2)}</div>
+        )}
+      </div>
+
+      {candidate.additionalImageUrls.length > 0 && (
+        <div>
+          <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
+            More photos
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {candidate.additionalImageUrls.map((url, i) => (
+              <a
+                key={i}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <Image
+                  src={url}
+                  alt={`${candidate.title} ${i + 2}`}
+                  width={80}
+                  height={80}
+                  className="w-[80px] h-[80px] object-cover rounded border border-gray-100"
+                />
+              </a>
+            ))}
+          </div>
         </div>
       )}
     </div>

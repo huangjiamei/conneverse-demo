@@ -12,6 +12,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { prewarmOtherPresets, computePickInPresets } from "@/lib/prewarm-presets";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -255,6 +256,21 @@ export async function POST(req: Request) {
     })),
   });
 
+  // 预跑其余 3 个 preset (调 matcher /api/rerank), 写 OptimizerResult 缓存。
+  // 完成后表里应有 4 × N 条, 之后切 preset 永远命中缓存。
+  await prewarmOtherPresets({
+    matchSearchId: matchSearch.id,
+    candidates: matchSearch.candidates.map((c) => ({
+      id: c.id,
+      ebayItemId: c.ebayItemId,
+    })),
+    rawList: candidates,
+    currentPreset: preset,
+  });
+
+  // 预热写完 4 个 preset 后, 算每个 candidate 在哪些 preset 下是 Rank 1
+  const pickMap = await computePickInPresets(matchSearch.id);
+
   // 排序: 有 optimizerRank 的在前, 其他按原 matcher rank 排后面
   const sorted = [...matchSearch.candidates].sort((a, b) => {
     const ar = a.optimizerRank;
@@ -297,6 +313,7 @@ export async function POST(req: Request) {
       enrichedFields: enrichedByItemId.get(c.ebayItemId) ?? null,
       compatibility: compatByItemId.get(c.ebayItemId) ?? null,
       additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
+      pickInPresets: pickMap.get(c.id) ?? [],
     })),
     meta: {
       matcherDurationMs,

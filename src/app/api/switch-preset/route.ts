@@ -16,6 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { computePickInPresets } from "@/lib/prewarm-presets";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -306,6 +307,9 @@ export async function POST(req: Request) {
     if (c.item_id) rawByItemId.set(c.item_id, c);
   }
 
+  // pick tag 独立于当前 preset (显示"在哪些 preset 下是 Rank 1"), 切 preset 后要保留
+  const pickMap = await computePickInPresets(matchSearchId);
+
   return NextResponse.json({
     matchSearchId,
     preset,
@@ -342,6 +346,7 @@ export async function POST(req: Request) {
         enrichedFields: rawC?.optimizer_fields ?? null,
         compatibility: (rawC?.compatibility as Record<string, unknown>) ?? null,
         additionalImageUrls: rawC?.additional_image_urls ?? [],
+        pickInPresets: pickMap.get(c.id) ?? [],
       };
     }),
   });

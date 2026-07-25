@@ -11,9 +11,21 @@
 
 import { useEffect, useState } from "react";
 import {
-  Loader2, Search, Wrench, DollarSign, Award, Calendar,
+  Loader2, Search, Wrench, DollarSign, Award, Calendar, Car,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
-import { CandidateCard, type Candidate } from "@/components/CandidateCard";
+import { type Candidate } from "@/components/CandidateCard";
+import { CandidateTable } from "./CandidateTable";
+
+// Popular vehicles —— 前端硬编码, 点一下用 /api/vehicles/resolve 反查 id 再填下拉。
+// 注意: "Silverado" 在 VCdb 里不存在, 实际叫 "Silverado 1500"。
+const POPULAR = [
+  { year: 2022, makeName: "Toyota", modelName: "Camry" },
+  { year: 2021, makeName: "Ford", modelName: "F-150" },
+  { year: 2023, makeName: "Honda", modelName: "Civic" },
+  { year: 2022, makeName: "Toyota", modelName: "RAV4" },
+  { year: 2021, makeName: "Chevrolet", modelName: "Silverado 1500" },
+] as const;
 
 // Job Status preset 胶囊 —— key 与 matcher 的 preset 对齐
 const PRESET_OPTIONS = [
@@ -67,6 +79,7 @@ export default function VehicleSearchClient() {
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [matchSearchId, setMatchSearchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showOthers, setShowOthers] = useState(false);
 
   // Year 预取
   useEffect(() => {
@@ -127,7 +140,73 @@ export default function VehicleSearchClient() {
       .finally(() => setLoadingSubmodels(false));
   }
 
+  // 车辆 popover
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [applyingPopular, setApplyingPopular] = useState<string | null>(null);
+
   const vehicleSelected = submodel != null;
+
+  // 胶囊显示名 (从已加载的列表里反查 make/model 名字)
+  const makeName = makes.find((m) => m.id === makeId)?.name ?? null;
+  const modelName = models.find((m) => m.id === modelId)?.name ?? null;
+  const capsuleLabel =
+    submodel && year && makeName && modelName
+      ? `${year} ${makeName} ${modelName} (${submodel.name})`
+      : "Select vehicle";
+
+  // 点 Popular vehicle: 反查 id → 依次加载并选中 year/make/model, 载入 submodel
+  // 列表让用户挑 trim。popover 保持打开。
+  async function applyPopular(p: {
+    year: number;
+    makeName: string;
+    modelName: string;
+  }) {
+    const key = `${p.year} ${p.makeName} ${p.modelName}`;
+    setApplyingPopular(key);
+    setError(null);
+    try {
+      const resolved = await fetch(
+        `/api/vehicles/resolve?year=${p.year}&make=${encodeURIComponent(
+          p.makeName
+        )}&model=${encodeURIComponent(p.modelName)}`
+      );
+      if (!resolved.ok) throw new Error("resolve failed");
+      const { makeId: mId, modelId: mdId } = await resolved.json();
+
+      // 依次加载列表 + 选中 (下拉需要列表里有对应 option 才能显示名字)
+      setYear(p.year);
+      setSubmodel(null);
+      const makesData: NamedOpt[] = await fetch(
+        `/api/vehicles/makes?year=${p.year}`
+      ).then((r) => r.json());
+      setMakes(makesData);
+      setMakeId(mId);
+      const modelsData: NamedOpt[] = await fetch(
+        `/api/vehicles/models?year=${p.year}&makeId=${mId}`
+      ).then((r) => r.json());
+      setModels(modelsData);
+      setModelId(mdId);
+      const subsData: SubModelOpt[] = await fetch(
+        `/api/vehicles/submodels?year=${p.year}&makeId=${mId}&modelId=${mdId}`
+      ).then((r) => r.json());
+      setSubmodels(subsData);
+      setSubmodel(null); // 让用户挑 trim
+    } catch {
+      setError(`Couldn't load ${key}`);
+    } finally {
+      setApplyingPopular(null);
+    }
+  }
+
+  function clearVehicle() {
+    setYear(null);
+    setMakeId(null);
+    setModelId(null);
+    setSubmodel(null);
+    setMakes([]);
+    setModels([]);
+    setSubmodels([]);
+  }
 
   async function handleSearch() {
     if (!submodel || !partDescription) return;
@@ -214,129 +293,215 @@ export default function VehicleSearchClient() {
         </div>
       </div>
 
-      {/* 级联下拉 */}
+      {/* 车辆胶囊 + 零件表单 */}
       <div className="mt-4 bg-white border border-gray-200 rounded-xl p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Dropdown
-            label="Year"
-            loading={loadingYears}
-            disabled={loadingYears}
-            value={year ?? ""}
-            onChange={(v) => selectYear(v ? Number(v) : null)}
-            placeholder="Select year"
-            options={years.map((y) => ({ value: y.id, label: String(y.id) }))}
-          />
-          <Dropdown
-            label="Make"
-            loading={loadingMakes}
-            disabled={year == null || loadingMakes}
-            value={makeId ?? ""}
-            onChange={(v) => selectMake(v ? Number(v) : null)}
-            placeholder={year == null ? "Select year first" : "Select make"}
-            options={makes.map((m) => ({ value: m.id, label: m.name }))}
-          />
-          <Dropdown
-            label="Model"
-            loading={loadingModels}
-            disabled={makeId == null || loadingModels}
-            value={modelId ?? ""}
-            onChange={(v) => selectModel(v ? Number(v) : null)}
-            placeholder={makeId == null ? "Select make first" : "Select model"}
-            options={models.map((m) => ({ value: m.id, label: m.name }))}
-          />
-          <Dropdown
-            label="Sub-model"
-            loading={loadingSubmodels}
-            disabled={modelId == null || loadingSubmodels}
-            value={submodel?.id ?? ""}
-            onChange={(v) =>
-              setSubmodel(submodels.find((s) => s.id === Number(v)) ?? null)
-            }
-            placeholder={modelId == null ? "Select model first" : "Select sub-model"}
-            options={submodels.map((s) => ({ value: s.id, label: s.name }))}
-          />
+        {/* Row 1: Vehicle 胶囊 + Part Description + Part Number (同行) */}
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          {/* 车辆胶囊 + popover */}
+          <div className="relative shrink-0">
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+              Vehicle
+            </div>
+            <button
+              type="button"
+              onClick={() => setPopoverOpen((o) => !o)}
+              className="mt-1 flex items-center gap-2 w-full sm:min-w-[220px] px-3 py-2 rounded-full border border-gray-300 bg-white text-sm text-[#1A1A2E] hover:border-gray-400 transition"
+            >
+              <Car size={14} className="text-gray-500 shrink-0" />
+              <span className="truncate">{capsuleLabel}</span>
+              <ChevronDown size={14} className="text-gray-400 shrink-0 ml-auto" />
+            </button>
+
+            {popoverOpen && (
+              <>
+                {/* 点外部关闭 (透明全屏 backdrop) */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setPopoverOpen(false)}
+                />
+                {/* popover 面板 */}
+                <div className="absolute left-0 top-full mt-2 z-50 w-[560px] max-w-[calc(100vw-3rem)] bg-white border border-gray-200 rounded-xl shadow-xl p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <h3 className="text-sm font-medium text-[#1A1A2E]">
+                      Add your vehicle to ensure fitment
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={clearVehicle}
+                      className="text-xs text-gray-500 hover:text-red-600 transition whitespace-nowrap"
+                    >
+                      Clear vehicle
+                    </button>
+                  </div>
+
+                  {/* Popular vehicles */}
+                  <div className="mt-4">
+                    <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+                      Popular vehicles
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {POPULAR.map((p) => {
+                        const key = `${p.year} ${p.makeName} ${p.modelName}`;
+                        const loading = applyingPopular === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => applyPopular(p)}
+                            disabled={applyingPopular != null}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-[13px] text-gray-600 hover:border-gray-300 disabled:opacity-60 transition"
+                          >
+                            {loading && (
+                              <Loader2 size={12} className="animate-spin" />
+                            )}
+                            {key}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 4 层级联下拉 */}
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <Dropdown
+                      label="Year"
+                      loading={loadingYears}
+                      disabled={loadingYears}
+                      value={year ?? ""}
+                      onChange={(v) => selectYear(v ? Number(v) : null)}
+                      placeholder="Select year"
+                      options={years.map((y) => ({ value: y.id, label: String(y.id) }))}
+                    />
+                    <Dropdown
+                      label="Make"
+                      loading={loadingMakes}
+                      disabled={year == null || loadingMakes}
+                      value={makeId ?? ""}
+                      onChange={(v) => selectMake(v ? Number(v) : null)}
+                      placeholder={year == null ? "Select year first" : "Select make"}
+                      options={makes.map((m) => ({ value: m.id, label: m.name }))}
+                    />
+                    <Dropdown
+                      label="Model"
+                      loading={loadingModels}
+                      disabled={makeId == null || loadingModels}
+                      value={modelId ?? ""}
+                      onChange={(v) => selectModel(v ? Number(v) : null)}
+                      placeholder={makeId == null ? "Select make first" : "Select model"}
+                      options={models.map((m) => ({ value: m.id, label: m.name }))}
+                    />
+                    <Dropdown
+                      label="Sub-model"
+                      loading={loadingSubmodels}
+                      disabled={modelId == null || loadingSubmodels}
+                      value={submodel?.id ?? ""}
+                      onChange={(v) =>
+                        setSubmodel(submodels.find((s) => s.id === Number(v)) ?? null)
+                      }
+                      placeholder={
+                        modelId == null ? "Select model first" : "Select sub-model"
+                      }
+                      options={submodels.map((s) => ({ value: s.id, label: s.name }))}
+                    />
+                  </div>
+
+                  {/* Done */}
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setPopoverOpen(false)}
+                      disabled={!vehicleSelected}
+                      className="px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Part Description (占剩余空间) */}
+          <div className="flex-1">
+            <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+              Part description
+            </label>
+            <input
+              value={partDescription}
+              onChange={(e) => setPartDescription(e.target.value)}
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
+              placeholder="e.g. Front bumper cover"
+            />
+          </div>
+
+          {/* Part Number (固定宽) */}
+          <div className="shrink-0 sm:w-[200px]">
+            <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+              Part number (optional)
+            </label>
+            <input
+              value={partNumber}
+              onChange={(e) => setPartNumber(e.target.value)}
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
+              placeholder="OEM number if known"
+            />
+          </div>
         </div>
 
-        {/* 选完四层才显示零件输入 */}
-        {vehicleSelected && (
-          <div className="mt-6 pt-6 border-t border-gray-100 space-y-4">
-            {/* Job Status preset 胶囊行 */}
-            <div>
-              <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
-                Job status
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {PRESET_OPTIONS.map(({ key, label, Icon }) => {
-                  const selected = preset === key;
-                  const loading = switchingPreset === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handlePresetSwitch(key)}
-                      disabled={switchingPreset != null}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[13px] transition disabled:opacity-60 ${
-                        selected
-                          ? "bg-teal-50 border-[#00B4A6] text-[#00B4A6]"
-                          : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      {loading ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <Icon size={12} />
-                      )}
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
+        {/* Row 2: Job Status 胶囊 (左) + Search eBay (右). 始终显示;
+            未选车时 Search 禁用但可见 */}
+        <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col sm:flex-row sm:items-end gap-4">
+          <div className="flex-1">
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+              Job status
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
-                  Part description
-                </label>
-                <input
-                  value={partDescription}
-                  onChange={(e) => setPartDescription(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
-                  placeholder="e.g. Front bumper cover"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
-                  Part number (optional)
-                </label>
-                <input
-                  value={partNumber}
-                  onChange={(e) => setPartNumber(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
-                  placeholder="OEM number if known"
-                />
-              </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PRESET_OPTIONS.map(({ key, label, Icon }) => {
+                const selected = preset === key;
+                const loading = switchingPreset === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handlePresetSwitch(key)}
+                    disabled={switchingPreset != null}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[13px] transition disabled:opacity-60 ${
+                      selected
+                        ? "bg-teal-50 border-[#00B4A6] text-[#00B4A6]"
+                        : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    {loading ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Icon size={12} />
+                    )}
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-
-            <button
-              onClick={handleSearch}
-              disabled={searching || !partDescription}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              {searching ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Searching eBay…
-                </>
-              ) : (
-                <>
-                  <Search size={14} />
-                  Search eBay
-                </>
-              )}
-            </button>
           </div>
-        )}
+
+          <button
+            onClick={handleSearch}
+            disabled={searching || !partDescription || !vehicleSelected}
+            title={!vehicleSelected ? "Select a vehicle first" : undefined}
+            className="sm:ml-auto shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            {searching ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Searching eBay…
+              </>
+            ) : (
+              <>
+                <Search size={14} />
+                Search eBay
+              </>
+            )}
+          </button>
+        </div>
 
         {error && (
           <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -364,26 +529,33 @@ export default function VehicleSearchClient() {
               No verified matches. Try adjusting the description or part number.
             </div>
           ) : (
-            <div className="grid gap-3 auto-rows-fr">
-              {verified.map((c) => (
-                <CandidateCard key={c.id} candidate={c} />
-              ))}
-            </div>
+            <CandidateTable candidates={verified} />
           )}
 
           {others.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">
-                Other candidates ({others.length})
-                <span className="text-gray-400 ml-1 normal-case tracking-normal font-normal">
-                  (uncertain / rejected)
+              <button
+                type="button"
+                onClick={() => setShowOthers((s) => !s)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-gray-200 bg-gray-50 text-xs text-gray-600 hover:bg-gray-100 transition"
+              >
+                <span className="uppercase tracking-wide font-medium">
+                  Other candidates ({others.length})
+                  <span className="text-gray-400 ml-1 normal-case tracking-normal font-normal">
+                    (uncertain / rejected)
+                  </span>
                 </span>
-              </h3>
-              <div className="grid gap-3 auto-rows-fr">
-                {others.map((c) => (
-                  <CandidateCard key={c.id} candidate={c} />
-                ))}
-              </div>
+                {showOthers ? (
+                  <ChevronUp size={14} />
+                ) : (
+                  <ChevronDown size={14} />
+                )}
+              </button>
+              {showOthers && (
+                <div className="mt-2">
+                  <CandidateTable candidates={others} />
+                </div>
+              )}
             </div>
           )}
         </div>
