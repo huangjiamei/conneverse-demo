@@ -12,7 +12,7 @@
 
 import { Fragment, useState } from "react";
 import Image from "next/image";
-import { Award, Star, ChevronRight, ChevronDown } from "lucide-react";
+import { Award, Star, ChevronRight, ChevronDown, Check } from "lucide-react";
 import {
   type Candidate,
   CandidateDetail,
@@ -20,6 +20,7 @@ import {
   formatWarranty,
   parseSellerPct,
 } from "@/components/CandidateCard";
+import { useSourcing } from "./SourcingContext";
 
 // preset → pick tag 文案 + 配色 (沿用设计 token: teal=Ready Now, amber=Best Price)
 const PICK_TAG: Record<string, { label: string; className: string }> = {
@@ -40,6 +41,69 @@ function PickTag({ preset }: { preset: string }) {
     >
       {meta.label}
     </span>
+  );
+}
+
+// Select 按钮: Add / ✓ Primary / ✓ Alt, 备选满时禁用
+function SelectButton({
+  candidate,
+  siblings,
+}: {
+  candidate: Candidate;
+  siblings: Candidate[];
+}) {
+  const s = useSourcing();
+  const isPrimary = s.primary?.id === candidate.id;
+  const isAlt = s.alternatives.some((a) => a.id === candidate.id);
+  const selected = isPrimary || isAlt;
+  const disabled = !selected && s.primary != null && s.altFull;
+
+  function handleClick() {
+    if (selected) {
+      s.remove(candidate.id);
+    } else if (!s.primary) {
+      s.selectAsPrimary(candidate, siblings);
+    } else if (!s.altFull) {
+      s.selectAsAlternative(candidate);
+    }
+  }
+
+  const base =
+    "inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[13px] font-medium transition whitespace-nowrap";
+  let cls: string;
+  let content: React.ReactNode;
+  if (isPrimary) {
+    cls = "bg-[#1A1A2E] text-white";
+    content = (
+      <>
+        <Check size={12} /> Primary
+      </>
+    );
+  } else if (isAlt) {
+    cls = "bg-teal-100 text-teal-700";
+    content = (
+      <>
+        <Check size={12} /> Alt
+      </>
+    );
+  } else if (disabled) {
+    cls = "bg-gray-200 text-gray-400 cursor-not-allowed";
+    content = "Full";
+  } else {
+    cls = "bg-[#00B4A6] hover:bg-[#00A396] text-white";
+    content = "Select";
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={disabled}
+      title={disabled ? "Alternatives full" : undefined}
+      className={`${base} ${cls}`}
+    >
+      {content}
+    </button>
   );
 }
 
@@ -77,6 +141,7 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
             <th className="px-3 py-2 font-medium">Warranty</th>
             <th className="px-3 py-2 font-medium text-right">Price</th>
             <th className="px-3 py-2 font-medium text-right">Score</th>
+            <th className="px-3 py-2" />
             <th className="px-3 py-2 w-8" />
           </tr>
         </thead>
@@ -190,6 +255,11 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
                     )}
                   </td>
 
+                  {/* Select (Add / Primary / Alt) */}
+                  <td className="px-3 py-2">
+                    <SelectButton candidate={c} siblings={sorted} />
+                  </td>
+
                   {/* 展开箭头 */}
                   <td className="px-3 py-2 text-right">
                     <button
@@ -209,7 +279,7 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
 
                 {isOpen && (
                   <tr className={isTopPick ? "bg-teal-50/30" : "bg-gray-50/60"}>
-                    <td colSpan={8} className="px-3 py-3 border-b border-gray-100">
+                    <td colSpan={9} className="px-3 py-3 border-b border-gray-100">
                       <div className="flex gap-3">
                         {c.imageUrl && (
                           <a

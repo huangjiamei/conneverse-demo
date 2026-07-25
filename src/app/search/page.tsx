@@ -6,7 +6,8 @@
  */
 
 import VehicleSearchClient from "./VehicleSearchClient";
-import QuoteBuilder from "@/components/QuoteBuilder";
+import QuoteBuilder from "./QuoteBuilder";
+import { SourcingProvider } from "./SourcingContext";
 
 export const metadata = {
   title: "New search — Conneverse",
@@ -15,15 +16,18 @@ export const metadata = {
 export default function VehicleSearchPage() {
   return (
     <main className="w-full max-w-[1280px] mx-auto p-6">
-      {/* 左主内容 + 右侧 320px Quote Builder 侧栏。<lg 时侧栏掉到下方 */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        <div className="flex-1 min-w-0 w-full">
-          <VehicleSearchClient />
+      {/* SourcingProvider 让表格 (Select 按钮) 和 QuoteBuilder 共享选购状态 */}
+      <SourcingProvider>
+        {/* 左主内容 + 右侧 320px Quote Builder 侧栏。<lg 时侧栏掉到下方 */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          <div className="flex-1 min-w-0 w-full">
+            <VehicleSearchClient />
+          </div>
+          <div className="w-full lg:w-[320px] flex-shrink-0">
+            <QuoteBuilder />
+          </div>
         </div>
-        <div className="w-full lg:w-[320px] flex-shrink-0">
-          <QuoteBuilder />
-        </div>
-      </div>
+      </SourcingProvider>
     </main>
   );
 }

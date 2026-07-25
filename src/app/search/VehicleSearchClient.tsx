@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { type Candidate } from "@/components/CandidateCard";
 import { CandidateTable } from "./CandidateTable";
+import { useSourcing } from "./SourcingContext";
 
 // Popular vehicles —— 前端硬编码, 点一下用 /api/vehicles/resolve 反查 id 再填下拉。
 // 注意: "Silverado" 在 VCdb 里不存在, 实际叫 "Silverado 1500"。
@@ -50,6 +51,8 @@ type SearchResponse = {
 };
 
 export default function VehicleSearchClient() {
+  const { resetSelections, setQuoteContext } = useSourcing();
+
   // 各层选项列表
   const [years, setYears] = useState<YearOpt[]>([]);
   const [makes, setMakes] = useState<NamedOpt[]>([]);
@@ -213,6 +216,13 @@ export default function VehicleSearchClient() {
     setError(null);
     setSearching(true);
     setResult(null);
+    resetSelections(); // 新搜索清空上一次的报价选择 (labor/tax 参数保留)
+    // 快照 vehicle + part 给 PDF 用 (submodel/makeName/modelName 此刻都有值)
+    const vLabel =
+      makeName && modelName
+        ? `${year} ${makeName} ${modelName} ${submodel.name}`
+        : capsuleLabel;
+    setQuoteContext(vLabel, partDescription);
     try {
       const res = await fetch("/api/search-vehicle", {
         method: "POST",
