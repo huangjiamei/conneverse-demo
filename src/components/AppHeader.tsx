@@ -26,9 +26,13 @@ export function AppHeader() {
           </span>
         </Link>
 
-        {/* 未来加导航链接 (Analytics / Settings) 放这里 */}
         <div className="flex items-center gap-4">
-          {/* 占位, 现在不放导航 */}
+          <Link
+            href="/search"
+            className="text-sm text-white/80 hover:text-[#00B4A6] transition"
+          >
+            New search →
+          </Link>
         </div>
       </div>
     </header>
