@@ -204,6 +204,21 @@ export async function POST(req: Request) {
     part_number: partNumber ?? "",
   };
 
+  // 选了 Part (有 pcdbSubCategoryId) → 查 PcdbToEbayMapping 拿 eBay 类目。
+  // none 类型 (primaryEbayId=null) 或自由文本/无 subCategory → 保持 null, matcher 回退。
+  // (块 2 只准备数据传过去, matcher 块 3 才消费)
+  let ebayCategoryId: number | null = null;
+  let ebayFallbackCategoryIds: number[] = [];
+  if (Number.isInteger(body.pcdbSubCategoryId)) {
+    const mapping = await prisma.pcdbToEbayMapping.findUnique({
+      where: { subCategoryId: body.pcdbSubCategoryId! },
+    });
+    if (mapping?.primaryEbayId) {
+      ebayCategoryId = mapping.primaryEbayId;
+      ebayFallbackCategoryIds = mapping.fallbackEbayIds;
+    }
+  }
+
   let matcherRes: Response;
   try {
     matcherRes = await fetch(`${MATCHER_URL}/api/match`, {
@@ -213,6 +228,9 @@ export async function POST(req: Request) {
         source_part_info: sourcePartInfo,
         use_llm: false,
         preset,
+        // eBay 类目路由 (块 3 前 matcher 忽略这两个字段, 无害)
+        ebay_category_id: ebayCategoryId,
+        ebay_fallback_category_ids: ebayFallbackCategoryIds,
       }),
     });
   } catch (err) {
