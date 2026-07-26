@@ -125,6 +125,12 @@ model MatchSearch {
   queryPartDescription  String
   queryPartNumber       String?
 
+  // VCdb 精确追踪 (只有 /search 独立搜索有; RO → PartLine 路径三个都是 null,
+  // 因为 RO 单只有字符串车辆信息, 没有 VCdb 关联)
+  queryVehicleSubModel     String?   // 用户选了 "All submodels" 时为 null
+  queryVcdbVehicleId       Int?      // 选具体 sub-model 时有值, All 时 null
+  queryVcdbBaseVehicleId   Int?      // /search 两种模式都有值
+
   // matcher 返回的摘要(方便列表查询,不用每次解 JSON)
   matcherLabel          Int?         // 0 / 1 / null
   labelSource           String?      // 'EXACT_MPN_MATCH' 等

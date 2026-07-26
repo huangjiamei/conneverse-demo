@@ -1,10 +1,14 @@
 /**
  * POST /api/search-vehicle
  *
- * Body: { vehicleId: number, partDescription: string, partNumber?: string }
+ * Body: { vehicleId | baseVehicleId, partDescription: string, partNumber?: string }
  *
  * 独立车辆搜索入口 (不落库)。用户在 /search 用 VCdb 级联下拉选定一辆
  * 具体车 (vehicleId), 直接跑 matcher 拿候选, 不创建 RepairOrder / PartLine。
+ *
+ * Sub-model 两种模式 (二选一, 必须且只能传一个):
+ *   - vehicleId     用户选了具体 sub-model → sub_model 传给 matcher, compat 带 Trim
+ *   - baseVehicleId 用户选了 "All"        → sub_model 为空, compat 只有 Year/Make/Model
  *
  * 与 /api/search 的区别:
  *   - /api/search 从已存的 PartLine 出发, 结果写 MatchSearch/Candidate/缓存
@@ -30,6 +34,7 @@ const VALID_PRESETS = new Set([
 
 type Body = {
   vehicleId?: number;
+  baseVehicleId?: number;
   partDescription?: string;
   partNumber?: string | null;
   preset?: string;
@@ -94,10 +99,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { vehicleId, partDescription, partNumber } = body;
-  if (!Number.isInteger(vehicleId) || !partDescription) {
+  const { vehicleId, baseVehicleId, partDescription, partNumber } = body;
+  const hasVehicleId = Number.isInteger(vehicleId);
+  const hasBaseVehicleId = Number.isInteger(baseVehicleId);
+  // 异或: 两个都传或都不传都是坏请求 (避免 "All" 和具体 sub-model 语义打架)
+  if (!partDescription || hasVehicleId === hasBaseVehicleId) {
     return NextResponse.json(
-      { error: "Body must include { vehicleId: int, partDescription: string }" },
+      {
+        error:
+          "Body must include { partDescription: string } and exactly one of { vehicleId: int } | { baseVehicleId: int }",
+      },
       { status: 400 }
     );
   }
@@ -107,39 +118,81 @@ export async function POST(req: Request) {
     ? (body.preset as string)
     : DEFAULT_PRESET;
 
-  // vehicleId → 年份 / 品牌 / 车型 / 子型号
-  const vehicle = await prisma.vcdbVehicle.findUnique({
-    where: { id: vehicleId! },
-    select: {
-      subModel: { select: { name: true } },
-      baseVehicle: {
-        select: {
-          yearId: true,
-          make: { select: { name: true } },
-          model: { select: { name: true } },
+  // 解析成 年份 / 品牌 / 车型 / 子型号。"All" 模式下 subModelName 为 null。
+  // vcdbVehicleId / vcdbBaseVehicleId 落库用 (MatchSearch 的 VCdb 精确追踪字段)。
+  let yearId: number;
+  let makeName: string;
+  let modelName: string;
+  let subModelName: string | null;
+  let vcdbVehicleId: number | null;
+  let vcdbBaseVehicleId: number;
+
+  if (hasVehicleId) {
+    // vehicleId → 年份 / 品牌 / 车型 / 子型号
+    const vehicle = await prisma.vcdbVehicle.findUnique({
+      where: { id: vehicleId! },
+      select: {
+        baseVehicleId: true,
+        subModel: { select: { name: true } },
+        baseVehicle: {
+          select: {
+            yearId: true,
+            make: { select: { name: true } },
+            model: { select: { name: true } },
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!vehicle) {
-    return NextResponse.json(
-      { error: `Vehicle not found: ${vehicleId}` },
-      { status: 404 }
-    );
+    if (!vehicle) {
+      return NextResponse.json(
+        { error: `Vehicle not found: ${vehicleId}` },
+        { status: 404 }
+      );
+    }
+
+    yearId = vehicle.baseVehicle.yearId;
+    makeName = vehicle.baseVehicle.make.name;
+    modelName = vehicle.baseVehicle.model.name;
+    subModelName = vehicle.subModel.name;
+    vcdbVehicleId = vehicleId!;
+    vcdbBaseVehicleId = vehicle.baseVehicleId;
+  } else {
+    // 用户选了 "All submodels" → 只查 BaseVehicle, 不锁定任何 sub-model
+    const bv = await prisma.vcdbBaseVehicle.findUnique({
+      where: { id: baseVehicleId! },
+      select: {
+        yearId: true,
+        make: { select: { name: true } },
+        model: { select: { name: true } },
+      },
+    });
+
+    if (!bv) {
+      return NextResponse.json(
+        { error: `Base vehicle not found: ${baseVehicleId}` },
+        { status: 404 }
+      );
+    }
+
+    yearId = bv.yearId;
+    makeName = bv.make.name;
+    modelName = bv.model.name;
+    subModelName = null;
+    vcdbVehicleId = null; // All 模式没锁定任何具体 VcdbVehicle
+    vcdbBaseVehicleId = baseVehicleId!;
   }
-
-  const { yearId } = vehicle.baseVehicle;
-  const makeName = vehicle.baseVehicle.make.name;
-  const modelName = vehicle.baseVehicle.model.name;
-  const subModelName = vehicle.subModel.name;
 
   const sourcePartInfo = {
     vehicle: {
       year: String(yearId),
       make: makeName,
       model_guess: modelName,
-      vehicle_raw: `${yearId} ${makeName} ${modelName} ${subModelName}`,
+      vehicle_raw: subModelName
+        ? `${yearId} ${makeName} ${modelName} ${subModelName}`
+        : `${yearId} ${makeName} ${modelName}`,
+      // 空串 = All submodels; matcher 据此决定 compat_filter 加不加 Trim 段
+      sub_model: subModelName ?? "",
     },
     part_description: partDescription,
     part_type: "",
@@ -231,6 +284,10 @@ export async function POST(req: Request) {
       queryVehicleModel: modelName,
       queryPartDescription: partDescription!,
       queryPartNumber: partNumber ?? null,
+      // VCdb 精确追踪: All 模式下 subModel / vehicleId 为 null, baseVehicleId 始终有值
+      queryVehicleSubModel: subModelName,
+      queryVcdbVehicleId: vcdbVehicleId,
+      queryVcdbBaseVehicleId: vcdbBaseVehicleId,
       matcherLabel: matcherData.label ?? null,
       labelSource: matcherData.label_source ?? null,
       candidateCount: candidates.length,

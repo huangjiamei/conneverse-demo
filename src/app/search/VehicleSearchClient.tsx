@@ -7,6 +7,9 @@
  * 选完四层拿到 vehicleId, 填零件描述后调 /api/search-vehicle (不落库)。
  *
  * 级联规则: 上层变化时, 清空下面所有层的已选值和已加载列表。
+ *
+ * SubModel 层可以选 "All (any submodel)": 此时不锁定具体 VcdbVehicle,
+ * 改传 baseVehicleId, matcher 的 compat_filter 就不会带 Trim 段。
  */
 
 import { useEffect, useState } from "react";
@@ -40,6 +43,23 @@ type YearOpt = { id: number };
 type NamedOpt = { id: number; name: string };
 type SubModelOpt = { id: number; name: string; baseVehicleId: number; vehicleId: number };
 
+// SubModel 下拉里 "All" 那一项的 option value (真实 sub-model 用数字 id)
+const ALL_SUBMODELS = "all";
+
+// 选具体 sub-model → 提交 vehicleId; 选 All → 提交 baseVehicleId。
+// 用一个 union 存, 避免 submodel/isAll 两个 state 相互不同步。
+type SubModelSelection =
+  | { kind: "all"; baseVehicleId: number }
+  | { kind: "one"; opt: SubModelOpt };
+
+// submodels 列表 → "All" 选择项。选完 Model 后默认就是它, 用户不用点第 4 层。
+// 同一 year+make+model 下所有 sub-model 共享 baseVehicleId (极少数一对多时取
+// 第一个也无妨: All 模式只用它反查 year/make/model 名字, 不锁定任何 sub-model)。
+function allSelectionFrom(list: SubModelOpt[]): SubModelSelection | null {
+  const bvId = list[0]?.baseVehicleId;
+  return bvId == null ? null : { kind: "all", baseVehicleId: bvId };
+}
+
 type SearchResponse = {
   matchSearchId?: string;
   label: number | null;
@@ -63,7 +83,7 @@ export default function VehicleSearchClient() {
   const [year, setYear] = useState<number | null>(null);
   const [makeId, setMakeId] = useState<number | null>(null);
   const [modelId, setModelId] = useState<number | null>(null);
-  const [submodel, setSubmodel] = useState<SubModelOpt | null>(null);
+  const [subSelection, setSubSelection] = useState<SubModelSelection | null>(null);
 
   // 各层 loading
   const [loadingYears, setLoadingYears] = useState(false);
@@ -99,7 +119,7 @@ export default function VehicleSearchClient() {
     // 清空下游
     setMakeId(null);
     setModelId(null);
-    setSubmodel(null);
+    setSubSelection(null);
     setMakes([]);
     setModels([]);
     setSubmodels([]);
@@ -116,7 +136,7 @@ export default function VehicleSearchClient() {
   function selectMake(newMakeId: number | null) {
     setMakeId(newMakeId);
     setModelId(null);
-    setSubmodel(null);
+    setSubSelection(null);
     setModels([]);
     setSubmodels([]);
     if (newMakeId == null || year == null) return;
@@ -131,14 +151,17 @@ export default function VehicleSearchClient() {
 
   function selectModel(newModelId: number | null) {
     setModelId(newModelId);
-    setSubmodel(null);
+    setSubSelection(null);
     setSubmodels([]);
     if (newModelId == null || year == null || makeId == null) return;
 
     setLoadingSubmodels(true);
     fetch(`/api/vehicles/submodels?year=${year}&makeId=${makeId}&modelId=${newModelId}`)
       .then((r) => r.json())
-      .then((data: SubModelOpt[]) => setSubmodels(data))
+      .then((data: SubModelOpt[]) => {
+        setSubmodels(data);
+        setSubSelection(allSelectionFrom(data)); // 默认 All, 选完 Model 就能搜
+      })
       .catch(() => setError("Failed to load sub-models"))
       .finally(() => setLoadingSubmodels(false));
   }
@@ -147,18 +170,24 @@ export default function VehicleSearchClient() {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [applyingPopular, setApplyingPopular] = useState<string | null>(null);
 
-  const vehicleSelected = submodel != null;
+  const vehicleSelected = subSelection != null;
 
   // 胶囊显示名 (从已加载的列表里反查 make/model 名字)
   const makeName = makes.find((m) => m.id === makeId)?.name ?? null;
   const modelName = models.find((m) => m.id === modelId)?.name ?? null;
+  const subModelLabel =
+    subSelection == null
+      ? null
+      : subSelection.kind === "all"
+        ? "All submodels"
+        : subSelection.opt.name;
   const capsuleLabel =
-    submodel && year && makeName && modelName
-      ? `${year} ${makeName} ${modelName} (${submodel.name})`
+    subModelLabel && year && makeName && modelName
+      ? `${year} ${makeName} ${modelName} (${subModelLabel})`
       : "Select vehicle";
 
   // 点 Popular vehicle: 反查 id → 依次加载并选中 year/make/model, 载入 submodel
-  // 列表让用户挑 trim。popover 保持打开。
+  // 列表并默认 All (用户可再手动挑 trim)。popover 保持打开。
   async function applyPopular(p: {
     year: number;
     makeName: string;
@@ -178,7 +207,7 @@ export default function VehicleSearchClient() {
 
       // 依次加载列表 + 选中 (下拉需要列表里有对应 option 才能显示名字)
       setYear(p.year);
-      setSubmodel(null);
+      setSubSelection(null);
       const makesData: NamedOpt[] = await fetch(
         `/api/vehicles/makes?year=${p.year}`
       ).then((r) => r.json());
@@ -193,7 +222,7 @@ export default function VehicleSearchClient() {
         `/api/vehicles/submodels?year=${p.year}&makeId=${mId}&modelId=${mdId}`
       ).then((r) => r.json());
       setSubmodels(subsData);
-      setSubmodel(null); // 让用户挑 trim
+      setSubSelection(allSelectionFrom(subsData)); // 默认 All
     } catch {
       setError(`Couldn't load ${key}`);
     } finally {
@@ -205,22 +234,24 @@ export default function VehicleSearchClient() {
     setYear(null);
     setMakeId(null);
     setModelId(null);
-    setSubmodel(null);
+    setSubSelection(null);
     setMakes([]);
     setModels([]);
     setSubmodels([]);
   }
 
   async function handleSearch() {
-    if (!submodel || !partDescription) return;
+    if (!subSelection || !partDescription) return;
     setError(null);
     setSearching(true);
     setResult(null);
     resetSelections(); // 新搜索清空上一次的报价选择 (labor/tax 参数保留)
-    // 快照 vehicle + part 给 PDF 用 (submodel/makeName/modelName 此刻都有值)
+    // 快照 vehicle + part 给 PDF 用 (subSelection/makeName/modelName 此刻都有值)
     const vLabel =
       makeName && modelName
-        ? `${year} ${makeName} ${modelName} ${submodel.name}`
+        ? subSelection.kind === "one"
+          ? `${year} ${makeName} ${modelName} ${subSelection.opt.name}`
+          : `${year} ${makeName} ${modelName}`
         : capsuleLabel;
     setQuoteContext(vLabel, partDescription);
     try {
@@ -228,7 +259,10 @@ export default function VehicleSearchClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          vehicleId: submodel.vehicleId,
+          // 二选一: 具体 sub-model 传 vehicleId, All 传 baseVehicleId
+          ...(subSelection.kind === "one"
+            ? { vehicleId: subSelection.opt.vehicleId }
+            : { baseVehicleId: subSelection.baseVehicleId }),
           partDescription,
           partNumber: partNumber || null,
           preset,
@@ -404,14 +438,33 @@ export default function VehicleSearchClient() {
                       label="Sub-model"
                       loading={loadingSubmodels}
                       disabled={modelId == null || loadingSubmodels}
-                      value={submodel?.id ?? ""}
-                      onChange={(v) =>
-                        setSubmodel(submodels.find((s) => s.id === Number(v)) ?? null)
+                      value={
+                        subSelection == null
+                          ? ""
+                          : subSelection.kind === "all"
+                            ? ALL_SUBMODELS
+                            : subSelection.opt.id
                       }
+                      onChange={(v) => {
+                        if (!v) return setSubSelection(null);
+                        if (v === ALL_SUBMODELS) {
+                          return setSubSelection(allSelectionFrom(submodels));
+                        }
+                        const opt = submodels.find((s) => s.id === Number(v));
+                        setSubSelection(opt ? { kind: "one", opt } : null);
+                      }}
                       placeholder={
                         modelId == null ? "Select model first" : "Select sub-model"
                       }
-                      options={submodels.map((s) => ({ value: s.id, label: s.name }))}
+                      // 列表加载后默认就是 All, 空占位项不再是有意义的状态,
+                      // 留着只会让用户误选进「没选车」而 Search 被禁用
+                      hidePlaceholder={submodels.length > 0}
+                      options={[
+                        ...(submodels.length > 0
+                          ? [{ value: ALL_SUBMODELS, label: "All (any submodel)" }]
+                          : []),
+                        ...submodels.map((s) => ({ value: s.id, label: s.name })),
+                      ]}
                     />
                   </div>
 
@@ -586,6 +639,7 @@ function Dropdown({
   onChange,
   placeholder,
   options,
+  hidePlaceholder = false,
 }: {
   label: string;
   loading: boolean;
@@ -593,7 +647,8 @@ function Dropdown({
   value: number | string;
   onChange: (value: string) => void;
   placeholder: string;
-  options: { value: number; label: string }[];
+  options: { value: number | string; label: string }[];
+  hidePlaceholder?: boolean;
 }) {
   return (
     <div>
@@ -607,7 +662,7 @@ function Dropdown({
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
       >
-        <option value="">{placeholder}</option>
+        {!hidePlaceholder && <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
