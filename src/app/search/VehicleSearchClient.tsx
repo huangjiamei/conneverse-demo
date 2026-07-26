@@ -15,11 +15,12 @@
 import { useEffect, useState } from "react";
 import {
   Loader2, Search, Wrench, DollarSign, Award, Calendar, Car,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, X,
 } from "lucide-react";
 import { type Candidate } from "@/components/CandidateCard";
 import { CandidateTable } from "./CandidateTable";
 import { useSourcing } from "./SourcingContext";
+import { applyPositions } from "@/constants/positionWords";
 
 // Popular vehicles —— 前端硬编码, 点一下用 /api/vehicles/resolve 反查 id 再填下拉。
 // 注意: "Silverado" 在 VCdb 里不存在, 实际叫 "Silverado 1500"。
@@ -59,6 +60,18 @@ function allSelectionFrom(list: SubModelOpt[]): SubModelSelection | null {
   const bvId = list[0]?.baseVehicleId;
   return bvId == null ? null : { kind: "all", baseVehicleId: bvId };
 }
+
+type CategoryOpt = { id: number; name: string };
+type SubCategoryOpt = { subCategoryId: number; subCategoryName: string };
+type PartOpt = { partId: number; partName: string };
+type PartSearchResult = {
+  partId: number;
+  partName: string;
+  subCategoryId: number;
+  subCategoryName: string;
+  categoryId: number;
+  categoryName: string;
+};
 
 type SearchResponse = {
   matchSearchId?: string;
@@ -104,6 +117,28 @@ export default function VehicleSearchClient() {
   const [error, setError] = useState<string | null>(null);
   const [showOthers, setShowOthers] = useState(false);
 
+  // PCdb: 分类级联下拉 + 搜索为主
+  const [categories, setCategories] = useState<CategoryOpt[]>([]);
+  const [catMenuOpen, setCatMenuOpen] = useState(false); // 级联下拉是否展开
+  const [menuExpandedCat, setMenuExpandedCat] = useState<number | null>(null); // 菜单内手风琴展开的大类
+  const [subcategories, setSubcategories] = useState<SubCategoryOpt[]>([]);
+  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
+  // 已提交的搜索范围 (存对象拿名字做入口标签)
+  const [scopeCat, setScopeCat] = useState<CategoryOpt | null>(null);
+  const [scopeSub, setScopeSub] = useState<SubCategoryOpt | null>(null);
+  // 分类来源: 'user'=用户主动从下拉选; 'auto'=选 Part 自动填。决定何时清。
+  const [categorySource, setCategorySource] = useState<"user" | "auto" | null>(null);
+  // scopeSub 选中时浏览它的 Part 列表 (无输入时展示)
+  const [parts, setParts] = useState<PartOpt[]>([]);
+  const [loadingParts, setLoadingParts] = useState(false);
+  // 搜索框 (= partDescription) 的结果下拉
+  const [searchResults, setSearchResults] = useState<PartSearchResult[]>([]);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [freeTextMode, setFreeTextMode] = useState(false);
+  // 最终选中 (选了 Part → id 有值; 自由文本 → null)。子类/大类走 scope + source。
+  const [selectedPartId, setSelectedPartId] = useState<number | null>(null);
+
   // Year 预取
   useEffect(() => {
     setLoadingYears(true);
@@ -113,6 +148,161 @@ export default function VehicleSearchClient() {
       .catch(() => setError("Failed to load years"))
       .finally(() => setLoadingYears(false));
   }, []);
+
+  // 26 大类预取
+  useEffect(() => {
+    fetch("/api/parts/categories")
+      .then((r) => r.json())
+      .then((data: CategoryOpt[]) => setCategories(data))
+      .catch(() => {});
+  }, []);
+
+  // 搜索框 (= partDescription) debounce 300ms → /api/parts/search。
+  // 已选中 Part 时不搜 (编辑框会先清 selectedPartId, 从而重新触发)。
+  useEffect(() => {
+    const q = partDescription.trim();
+    if (!q || selectedPartId != null || freeTextMode) {
+      setSearchResults([]);
+      setLoadingSearch(false);
+      return;
+    }
+    setLoadingSearch(true);
+    const t = setTimeout(() => {
+      // 范围按最细的选中层级: 子类 > 大类 > 全局
+      const url =
+        `/api/parts/search?q=${encodeURIComponent(q)}&limit=15` +
+        (scopeCat ? `&categoryId=${scopeCat.id}` : "") +
+        (scopeSub ? `&subCategoryId=${scopeSub.subCategoryId}` : "");
+      fetch(url)
+        .then((r) => r.json())
+        .then((d: PartSearchResult[]) =>
+          setSearchResults(Array.isArray(d) ? d : [])
+        )
+        .catch(() => setSearchResults([]))
+        .finally(() => setLoadingSearch(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [partDescription, selectedPartId, freeTextMode, scopeCat, scopeSub]);
+
+  // 级联菜单: 展开/折叠某大类看它的子类 (accordion, 一次一个)。不提交范围。
+  function toggleMenuCategory(id: number) {
+    const next = menuExpandedCat === id ? null : id;
+    setMenuExpandedCat(next);
+    setSubcategories([]);
+    if (next == null) return;
+    setLoadingSubcategories(true);
+    fetch(`/api/parts/subcategories?categoryId=${next}`)
+      .then((r) => r.json())
+      .then((d: SubCategoryOpt[]) => setSubcategories(Array.isArray(d) ? d : []))
+      .catch(() => setSubcategories([]))
+      .finally(() => setLoadingSubcategories(false));
+  }
+
+  // 分类是自动填的 → 连同来源一起清 (Part 走了, auto 填的也走)
+  function clearScopeIfAuto() {
+    if (categorySource === "auto") {
+      setScopeCat(null);
+      setScopeSub(null);
+      setParts([]);
+      setCategorySource(null);
+    }
+  }
+
+  // 选 "全部分类" → 清范围 (source=null, 即无过滤; 提交时不带分类)
+  function selectAllScope() {
+    setScopeCat(null);
+    setScopeSub(null);
+    setParts([]);
+    setCategorySource(null);
+    setCatMenuOpen(false);
+  }
+
+  // 用户主动选整个大类 (categoryId, 无 subCategory) → source='user'
+  function selectCategoryScope(cat: CategoryOpt) {
+    setScopeCat(cat);
+    setScopeSub(null);
+    setParts([]);
+    setCategorySource("user");
+    setCatMenuOpen(false);
+  }
+
+  // 用户主动选具体子类 → source='user', 顺带加载 Part 列表供浏览
+  function selectSubcategoryScope(cat: CategoryOpt, sub: SubCategoryOpt) {
+    setScopeCat(cat);
+    setScopeSub(sub);
+    setCategorySource("user");
+    setCatMenuOpen(false);
+    setPartDescription("");
+    setSelectedPartId(null);
+    setParts([]);
+    setLoadingParts(true);
+    fetch(
+      `/api/parts/by-subcategory?subCategoryId=${sub.subCategoryId}&categoryId=${cat.id}`
+    )
+      .then((r) => r.json())
+      .then((d: PartOpt[]) => setParts(Array.isArray(d) ? d : []))
+      .catch(() => setParts([]))
+      .finally(() => setLoadingParts(false));
+    setResultsOpen(true);
+  }
+
+  // 选一个 Part → 最终描述 = 用户输入里的方位词 + Part 标准名。
+  // 自动填该 Part 的归属分类到下拉 (source='auto', 覆盖之前的 user 选择, 更准确)。
+  // pcdbPartId 始终存本体 id (不含方位)。
+  function selectPart(
+    partId: number,
+    partName: string,
+    subCategoryId: number,
+    // 来自搜索结果时带上分类, 用来同步分类下拉 (浏览列表选的已经在 scope 内, 不传)
+    category?: CategoryOpt,
+    subCategory?: SubCategoryOpt
+  ) {
+    setPartDescription((prev) => applyPositions(prev, partName));
+    setSelectedPartId(partId);
+    if (category) setScopeCat(category);
+    if (subCategory) setScopeSub(subCategory);
+    setCategorySource("auto"); // 选 Part → 自动填分类
+    setFreeTextMode(false);
+    setResultsOpen(false);
+  }
+
+  // 编辑描述 → 解绑 Part; 分类若是 auto 填的也一起清 (重新搜)
+  function onPartDescriptionChange(v: string) {
+    setPartDescription(v);
+    setSelectedPartId(null);
+    clearScopeIfAuto();
+    setResultsOpen(true);
+  }
+
+  // 清空输入框 (× 或删空) → 解绑 Part; auto 分类清, user 分类留
+  function clearPartInput() {
+    setPartDescription("");
+    setSelectedPartId(null);
+    setSearchResults([]);
+    clearScopeIfAuto();
+  }
+
+  // 清空全部: 分类回全局 + 描述 + 选中 Part + 来源 全清
+  function clearAll() {
+    setScopeCat(null);
+    setScopeSub(null);
+    setCategorySource(null);
+    setParts([]);
+    setPartDescription("");
+    setSelectedPartId(null);
+    setFreeTextMode(false);
+    setSearchResults([]);
+    setResultsOpen(false);
+    setMenuExpandedCat(null);
+    setCatMenuOpen(false);
+  }
+
+  // 入口标签
+  const scopeLabel = scopeSub
+    ? `${scopeCat?.name ?? ""} › ${scopeSub.subCategoryName}`
+    : scopeCat
+      ? scopeCat.name
+      : "All categories";
 
   function selectYear(newYear: number | null) {
     setYear(newYear);
@@ -242,6 +432,13 @@ export default function VehicleSearchClient() {
 
   async function handleSearch() {
     if (!subSelection || !partDescription) return;
+    // 提交的分类范围: 选了 Part → 用 Part 的(auto); 自由文本 → 只用 user 来源的
+    // (auto 来源的分类在自由文本时排除, 虽然清除逻辑通常已把它清掉了)
+    const usingScope = selectedPartId != null || categorySource === "user";
+    const submitCategoryId = usingScope ? (scopeCat?.id ?? null) : null;
+    const submitSubCategoryId = usingScope
+      ? (scopeSub?.subCategoryId ?? null)
+      : null;
     setError(null);
     setSearching(true);
     setResult(null);
@@ -266,6 +463,10 @@ export default function VehicleSearchClient() {
           partDescription,
           partNumber: partNumber || null,
           preset,
+          // 选了具体 Part 时带上 PCdb id, 自由文本时为 null
+          pcdbPartId: selectedPartId,
+          pcdbSubCategoryId: submitSubCategoryId,
+          pcdbCategoryId: submitCategoryId,
         }),
       });
       if (!res.ok) {
@@ -339,7 +540,7 @@ export default function VehicleSearchClient() {
 
       {/* 车辆胶囊 + 零件表单 */}
       <div className="mt-4 bg-white border border-gray-200 rounded-xl p-6">
-        {/* Row 1: Vehicle 胶囊 + Part Description + Part Number (同行) */}
+        {/* Row 1: Vehicle 胶囊 + Part Number (同行) */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-3">
           {/* 车辆胶囊 + popover */}
           <div className="relative shrink-0">
@@ -484,19 +685,6 @@ export default function VehicleSearchClient() {
             )}
           </div>
 
-          {/* Part Description (占剩余空间) */}
-          <div className="flex-1">
-            <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
-              Part description
-            </label>
-            <input
-              value={partDescription}
-              onChange={(e) => setPartDescription(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
-              placeholder="e.g. Front bumper cover"
-            />
-          </div>
-
           {/* Part Number (固定宽) */}
           <div className="shrink-0 sm:w-[200px]">
             <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
@@ -509,6 +697,283 @@ export default function VehicleSearchClient() {
               placeholder="OEM number if known"
             />
           </div>
+        </div>
+
+        {/* 零件选择: 分类级联下拉 + 搜索为主 (+ 自由文本兜底) */}
+        <div className="mt-6 pt-6 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2 gap-3">
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+              Part
+            </div>
+            {(scopeCat || partDescription) && (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="shrink-0 text-xs text-gray-400 hover:text-red-600 transition"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {freeTextMode ? (
+            /* 自由文本模式 */
+            <div>
+              <input
+                value={partDescription}
+                onChange={(e) => setPartDescription(e.target.value)}
+                autoFocus
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
+                placeholder="Describe the part, e.g. Front bumper cover"
+              />
+              <button
+                type="button"
+                onClick={() => setFreeTextMode(false)}
+                className="mt-2 text-xs text-[#00B4A6] hover:underline"
+              >
+                ← Browse the catalog instead
+              </button>
+            </div>
+          ) : (
+            <div>
+              {/* 一行: 分类级联下拉 + 搜索框 */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                {/* 分类级联下拉 */}
+                <div className="relative shrink-0 sm:w-[240px]">
+                  <button
+                    type="button"
+                    onClick={() => setCatMenuOpen((o) => !o)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white hover:border-gray-400 transition"
+                  >
+                    <span className="truncate">{scopeLabel}</span>
+                    <ChevronDown
+                      size={14}
+                      className={`shrink-0 text-gray-400 transition-transform ${catMenuOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  {catMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={() => setCatMenuOpen(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-1 z-40 w-full min-w-[240px] bg-white border border-gray-200 rounded-lg shadow-xl max-h-[360px] overflow-y-auto">
+                        {/* 全部分类 */}
+                        <button
+                          type="button"
+                          onClick={selectAllScope}
+                          className={`w-full text-left px-3 py-2 text-sm border-b border-gray-50 transition ${
+                            !scopeCat
+                              ? "bg-teal-50 text-teal-700 font-medium"
+                              : "text-[#1A1A2E] hover:bg-gray-50"
+                          }`}
+                        >
+                          All categories
+                        </button>
+                        {categories.map((c) => {
+                          const open = menuExpandedCat === c.id;
+                          const catActive = scopeCat?.id === c.id && !scopeSub;
+                          return (
+                            <div
+                              key={c.id}
+                              className="border-b border-gray-50 last:border-b-0"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleMenuCategory(c.id)}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition ${
+                                  catActive
+                                    ? "bg-teal-50 text-teal-700 font-medium"
+                                    : "text-[#1A1A2E] hover:bg-gray-50"
+                                }`}
+                              >
+                                <span className="truncate">{c.name}</span>
+                                <ChevronDown
+                                  size={14}
+                                  className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+                                />
+                              </button>
+                              {open && (
+                                <div className="bg-gray-50/50 pb-1">
+                                  {/* 选整个大类 */}
+                                  <button
+                                    type="button"
+                                    onClick={() => selectCategoryScope(c)}
+                                    className="w-full text-left pl-5 pr-3 py-1.5 text-[13px] text-[#00B4A6] hover:bg-gray-100"
+                                  >
+                                    Search all of {c.name}
+                                  </button>
+                                  {loadingSubcategories ? (
+                                    <div className="px-5 py-1.5 text-xs text-gray-400 inline-flex items-center gap-1.5">
+                                      <Loader2 size={11} className="animate-spin" />{" "}
+                                      Loading…
+                                    </div>
+                                  ) : (
+                                    subcategories.map((sub) => {
+                                      const activeSub =
+                                        scopeSub?.subCategoryId === sub.subCategoryId;
+                                      return (
+                                        <button
+                                          key={sub.subCategoryId}
+                                          type="button"
+                                          onClick={() => selectSubcategoryScope(c, sub)}
+                                          className={`w-full text-left pl-5 pr-3 py-1.5 text-[13px] transition ${
+                                            activeSub
+                                              ? "text-teal-700 font-medium bg-teal-50"
+                                              : "text-gray-600 hover:bg-gray-100"
+                                          }`}
+                                        >
+                                          {sub.subCategoryName}
+                                        </button>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* 搜索框 = partDescription (保留用户输入, 带方位)。带 × 清空 */}
+                <div className="relative flex-1 min-w-0">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    value={partDescription}
+                    onChange={(e) => onPartDescriptionChange(e.target.value)}
+                    onFocus={() => {
+                      if (selectedPartId == null) setResultsOpen(true);
+                    }}
+                    placeholder={
+                      scopeSub
+                        ? `Search in ${scopeSub.subCategoryName}…`
+                        : scopeCat
+                          ? `Search in ${scopeCat.name}…`
+                          : "Search all parts…"
+                    }
+                    className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
+                  />
+                  {partDescription && (
+                    <button
+                      type="button"
+                      onClick={clearPartInput}
+                      aria-label="Clear search"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 结果: 有输入 → 搜索结果(面包屑); 无输入但选了子类 → 该子类 Part 列表 */}
+              {resultsOpen &&
+                selectedPartId == null &&
+                (partDescription.trim() || scopeSub) && (
+                <div className="mt-2 border border-gray-200 rounded-lg max-h-[320px] overflow-y-auto">
+                  {partDescription.trim() ? (
+                    <>
+                      {loadingSearch && searchResults.length === 0 ? (
+                        <div className="px-3 py-3 text-xs text-gray-400 inline-flex items-center gap-1.5">
+                          <Loader2 size={12} className="animate-spin" /> Searching…
+                        </div>
+                      ) : (
+                        <>
+                          {searchResults.length > 0 && (
+                            <div className="divide-y divide-gray-50">
+                              {searchResults.map((r) => (
+                                <button
+                                  key={r.partId}
+                                  type="button"
+                                  onClick={() =>
+                                    selectPart(
+                                      r.partId,
+                                      r.partName,
+                                      r.subCategoryId,
+                                      { id: r.categoryId, name: r.categoryName },
+                                      {
+                                        subCategoryId: r.subCategoryId,
+                                        subCategoryName: r.subCategoryName,
+                                      }
+                                    )
+                                  }
+                                  className={`w-full text-left px-3 py-2 transition ${
+                                    selectedPartId === r.partId
+                                      ? "bg-teal-50"
+                                      : "hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <div className="text-sm text-[#1A1A2E]">{r.partName}</div>
+                                  <div className="text-[11px] text-gray-400">
+                                    {r.categoryName} › {r.subCategoryName}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {/* free text 入口: 有结果 → 列表底部低调; 无结果 → 唯一一条 */}
+                          <button
+                            type="button"
+                            onClick={() => setResultsOpen(false)}
+                            className={`w-full text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition ${
+                              searchResults.length > 0 ? "border-t border-gray-100" : ""
+                            }`}
+                          >
+                            {searchResults.length > 0 ? (
+                              "Use free text →"
+                            ) : (
+                              <>
+                                Search{" "}
+                                <span className="text-[#1A1A2E] font-medium">
+                                  &ldquo;{partDescription.trim()}&rdquo;
+                                </span>{" "}
+                                as free text →
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  ) : scopeSub ? (
+                    loadingParts ? (
+                      <div className="px-3 py-3 text-xs text-gray-400 inline-flex items-center gap-1.5">
+                        <Loader2 size={12} className="animate-spin" /> Loading parts…
+                      </div>
+                    ) : parts.length === 0 ? (
+                      <div className="px-3 py-3 text-xs text-gray-400">
+                        No parts in this sub-category.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {parts.map((p) => (
+                          <button
+                            key={p.partId}
+                            type="button"
+                            onClick={() =>
+                              selectPart(p.partId, p.partName, scopeSub.subCategoryId)
+                            }
+                            className={`w-full text-left px-3 py-1.5 text-sm transition ${
+                              selectedPartId === p.partId
+                                ? "bg-teal-50 text-teal-700"
+                                : "text-[#1A1A2E] hover:bg-gray-50"
+                            }`}
+                          >
+                            {p.partName}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Row 2: Job Status 胶囊 (左) + Search eBay (右). 始终显示;

@@ -38,6 +38,11 @@ type Body = {
   partDescription?: string;
   partNumber?: string | null;
   preset?: string;
+  // /search autocomplete 选了具体 Part 时带上 (自由文本时为 null)。
+  // 只落库追踪, 不改 matcher 调用。
+  pcdbPartId?: number | null;
+  pcdbSubCategoryId?: number | null;
+  pcdbCategoryId?: number | null;
 };
 
 type MatcherOptimizerFields = {
@@ -288,6 +293,10 @@ export async function POST(req: Request) {
       queryVehicleSubModel: subModelName,
       queryVcdbVehicleId: vcdbVehicleId,
       queryVcdbBaseVehicleId: vcdbBaseVehicleId,
+      // PCdb 分类追踪 (autocomplete 选了 Part 时有值)
+      queryPcdbPartId: body.pcdbPartId ?? null,
+      queryPcdbSubCategoryId: body.pcdbSubCategoryId ?? null,
+      queryPcdbCategoryId: body.pcdbCategoryId ?? null,
       matcherLabel: matcherData.label ?? null,
       labelSource: matcherData.label_source ?? null,
       candidateCount: candidates.length,

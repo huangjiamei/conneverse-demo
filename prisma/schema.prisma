@@ -2,11 +2,13 @@
 // Single-file layout, 详见 model 之间的分区注释
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pg_trgm]
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -127,6 +129,11 @@ model MatchSearch {
   queryVehicleSubModel   String? // 用户选了 "All submodels" 时为 null
   queryVcdbVehicleId     Int? // 选具体 sub-model 时有值, All 时 null
   queryVcdbBaseVehicleId Int? // /search 两种模式都有值
+
+  // PCdb 分类追踪 (只有 /search autocomplete 选了具体 Part 时有值; 自由文本为 null)
+  queryPcdbPartId        Int?
+  queryPcdbSubCategoryId Int?
+  queryPcdbCategoryId    Int?
 
   // matcher 返回的摘要(方便列表查询,不用每次解 JSON)
   matcherLabel   Int? // 0 / 1 / null
@@ -313,6 +320,8 @@ model PcdbPart {
   partCategories PcdbPartCategory[]
 
   @@index([name])
+  // pg_trgm gin 索引, 给 /api/parts/search 的 fuzzy (similarity/ILIKE) 提速
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, name: "idx_pcdbpart_name_trgm")
 }
 
 model PcdbPartCategory {
