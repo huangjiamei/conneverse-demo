@@ -1,0 +1,241 @@
+sub_id,sub_name,primary_ebay_id,primary_ebay_name,fallback_ebay_ids,confidence,note
+101,ABS Components,33560,Additional ABS Parts,262084;262085;262086,high,ABS 拆件多: 液压单元 262084 / 模块 262085 / 轮速传感器 262086
+102,A/C Accumulator / Receiver Drier,262076,A/C Receiver Dryers & Accumulators,,high,同名匹配
+103,A/C Clutch and Compressor,33543,A/C Compressors & Clutches,,high,同名匹配
+104,A/C Condenser and Evaporator,61864,A/C Condensers,33547,high,eBay 冷凝器/蒸发器分两类; 主推冷凝器 fallback 蒸发器
+106,Aero Ground Effects and Body Kits,33638,Spoilers & Wings,38658;14769,medium,eBay 真正的 Body Kits(36475) 在 Performance & Racing 子树不在 Car&Truck; 就近选 Spoilers
+107,Air Bag System,177710,Airbags,177711,high,气囊本体 + 气囊零件
+108,Air Injection System,33610,Secondary Air & Smog Pumps,46097,high,二次空气喷射泵
+109,Air Tools,,,,none,工具类 - eBay Car&Truck Parts 无对应; 走自由文本
+110,Alternator / Generator and Related Components,177697,Alternators & Generators,177698;33577,high,发电机本体 + 零件 + 调节器
+111,Anti-Theft System,9886,Other Car & Truck Parts & Accessories,,low,防盗在 eBay 属 In-Car Technology(38635) 子树 - 不在我们的 Car&Truck leaf 里; 兜底 Other
+112,Appearance Products,14769,Other Exterior Parts & Accessories,,low,外观化学品/装饰 - 无准确类目
+115,Axle Shaft,262238,Axles,33728;262243,high,半轴/桥轴
+116,Battery and Related Components,179846,Batteries,33575,high,常规 12V 电瓶在 Starters/Alternators 分支下 179846; 注意 177703 是 EV 高压电池不要混
+118,Body Wiring Harness and Components,179847,"Wiring Harnesses, Cables & Connectors",262210,high,车身线束
+119,"Body and Frame Equipment, Tools and Supplies",,,,none,钣金工具/耗材 - 非零件
+120,"Brackets, Flanges and Hangers",262164,"Mounts, Brackets & Hardware",262127;33634,medium,通用支架 - 按外观件支架为主; 发动机支架 262127 / 排气吊耳 33634
+122,Brake Hydraulics,33566,Master Cylinders,33571;33561;262091,medium,制动液压覆盖总泵/分泵/管路/储液罐; 主推总泵
+123,Bumper,262146,Bumper Inserts & Covers,33640;38658,high,保险杠皮 262146 / 加强杠 33640 / air dam 38658
+125,Carburetion,33550,Carburetors,33551,high,化油器本体 + 零件
+126,Catalytic Converter,33629,Catalytic Converters,46097,high,同名匹配
+127,Clamps,33634,"Clamps, Flanges, Hangers & Hardware",262118,medium,通用卡箍 - 排气类为主; 冷却卡箍 262118
+128,Clutch Plates,262241,Clutch Kits,262242,high,离合器片一般随套件卖
+129,Console,262188,Center & Overhead Consoles,262189,high,中控台/顶置台
+130,Control Cables,61259,Throttle Cables & Linkages,33568;61265;33736,low,控制拉线跨系统: 油门/刹车/离合/换挡 - 需按上下文细分
+131,Control Modules,33596,ECUs & Computer Modules,262085;262259;177705,high,ECU/BCM 通用模块
+132,"Cooling Fan, Clutch and Motor",33600,Fan & Shroud Assemblies,262120;262121;262119,high,风扇总成 + 离合 + 电机 + 叶片
+133,Cowl,262168,Additional Panels,14769,medium,雨刮盖板/前围板 - eBay 无独立类目
+134,Crankcase Ventilation System,262143,Emissions Hardware & Components,46097,medium,PCV 系统归排放硬件
+135,Cruise Control System,38728,Cruise Control Components,,high,同名匹配
+136,Cylinder Block Components,33613,Engine Blocks,262124;33623,high,缸体 + 连杆 + 活塞
+137,Differential,262245,Differential Assemblies,262249;262246,high,差速器总成 + 零件
+138,Disc Pads and Brake Shoes,57357,Brake Pads,61739,high,刹车片 57357 / 刹车蹄 61739 分开两类
+139,Doors,179850,Doors & Door Skins,179851;262148;262150,high,车门本体 + 门把手 + 门封条 + 铰链锁
+140,Drive Shaft,262251,Driveshafts,262252;262253,high,传动轴 + 万向节
+141,Drums and Rotors,33564,Brake Disc Rotors,33565,high,盘 33564 / 鼓 33565
+142,EGR and Related Components,33607,EGR Parts & Valves,,high,同名匹配
+143,Electrical Connectors,179847,"Wiring Harnesses, Cables & Connectors",262210,medium,通用电气插件 - 归线束类
+144,Electrical Sockets,262210,"Sockets, Connectors & Wiring",179847,medium,灯座类为主
+145,Electronic Accessories,9886,Other Car & Truck Parts & Accessories,,low,泛电子配件 - 无准确类目
+147,Engine Service,,,,none,保养服务类 - 非零件
+148,Evaporative System,261899,Fuel Vapor Canisters,46097,high,碳罐/EVAP
+149,Exhaust and Tail Pipes,33633,Exhaust Pipes & Tips,,high,排气管/尾喉
+150,Exhaust Manifolds,33632,Manifolds & Headers,,high,排气歧管
+151,Exhaust System Service,,,,none,服务类 - 非零件
+152,Fenders,33644,Fenders,262168,high,同名匹配
+153,Filters,33659,Air Filters,33661;33660;61117;33662,medium,滤芯跨系统: 空气/机油/燃油/空调/变速箱 - 需按上下文细分
+154,"Flasher Units, Fuses, and Circuit Breakers",262221,Fuses & Fuse Boxes,262222,high,保险丝 + 继电器
+155,Flexplate,33732,Flywheels & Flexplates,,high,同名匹配
+156,Floor,262168,Additional Panels,33697,medium,地板钣金 262168; 脚垫是 33697 别混
+157,Flywheel,33732,Flywheels & Flexplates,,high,同名匹配
+158,Frame,262152,Frame Rails & Subframes,,high,车架纵梁/副车架
+159,Front Panel,262168,Additional Panels,14769,medium,前脸板/水箱框架 - eBay 无独立类目
+160,Fuel Injection System and Related Components,33554,Fuel Injectors,33553;262071;33558,high,喷油嘴 + 高压泵 + 节气门
+161,Fuel Pumps and Related Components,33555,Fuel Pumps & Sending Units,262071,high,燃油泵 + 油浮子
+162,Fuel Storage,33556,Fuel Tanks & Filler Necks,262072;262167,high,油箱 + 油箱盖 + 加油口小门
+163,Fuel System Service,,,,none,服务类 - 非零件
+164,"Functional Fluid, Lubricant, Grease (including Additives)",,,,none,油液化学品 - 不在 Car&Truck Parts 子树
+165,Gaskets and Sealing Systems,33665,Gaskets & Seals,262128;33666;262122;262260,medium,垫片跨系统: 发动机/排气/冷却/变速箱 - 需按上下文细分
+166,"Glass, Windows and Related Components",33684,Auto Glass,33685;6781,high,玻璃 + 密封条
+167,Glove Box,33698,"Glove Boxes, Doors & Latches",,high,同名匹配
+169,Grille,33645,Grilles,262154,high,同名匹配
+170,Hand Tools,,,,none,工具类 - 非零件
+171,Heater Control Valve and Related Components,262080,Heater Control Valves,,high,同名匹配
+173,Heater Switches and Electrical Components,33545,HVAC Controls & Control Units,262082,high,空调控制面板
+174,"Hoist, Lift and Support",262158,Lift Supports & Prop Rods,262150,medium,如果指引擎盖撑杆选 262158; 如果指举升机则无对应(工具)
+175,Hood,33646,Hood Panels,262156;262157;262158,high,机盖板 + 铰链锁 + 通风口 + 撑杆
+177,Hoses and Pipes,173950,"Hoses, Lines & Pipes",33601;33561;262225,medium,管路跨系统: 油路/水路/刹车/转向 - 需按上下文细分
+178,Instrument Panel,262191,Dash Panels,33675;43951,high,仪表台板 + 仪表
+179,Interior,9887,Other Interior Parts & Accessories,33705,low,泛内饰 - 太宽
+180,Lighting - Exterior,33710,Headlight Assemblies,33716;33717;33708;33709;33715;262205;262206;262208,medium,外部灯具跨类: 大灯为主; 尾灯/转向/雾灯/侧标志各有类目 - 建议按 Part 级细分
+181,Lighting - Instrumentation,172517,Light Bulbs & LEDs,33675;43951,medium,仪表照明多为灯泡
+182,Lighting - Interior,33712,Interior Light Assemblies,172517,high,车内灯具
+183,Manual Transmission Components,33733,Manual Transmission Parts,171117,high,手动箱零件 / 整箱 171117
+184,Mirrors,262161,Mirror Assemblies,262162;262163;33699,high,外后视镜总成 + 零件 + 镜片; 车内镜 33699
+185,Mobile Multi-Media,9886,Other Car & Truck Parts & Accessories,,low,车载多媒体在 In-Car Technology 子树 - 不在范围
+186,Motors,33706,Window Motors & Regulators,61941;33546;262121,low,电机跨系统: 玻璃升降/雨刮/鼓风机/风扇 - 需按上下文细分
+187,Mufflers,33636,Mufflers & Resonators,,high,同名匹配
+188,Power Outlets,262198,Power Outlets & Lighters,,high,同名匹配
+189,"Power Steering Hoses, Pumps, and Related Components",33588,Power Steering Pumps,262225;262226,high,转向泵 + 管路 + 泵零件
+190,Primary Ignition,33690,Distributors,262183;262186;262184;262185,medium,初级点火: 分电器/白金/电容/模块
+191,Power Take Off (PTO) and Components,46104,Other Transmission & Drivetrain,,low,PTO eBay 无独立类目(多在商用车子树)
+192,Quarter Panel,262166,Body Side & Quarter Panels,,high,同名匹配
+193,"Radiators, Coolers and Related Components",33602,Radiators,46095;262255;174030,high,水箱 + 油冷 + 膨胀壶
+194,Rear Body,262168,Additional Panels,262166;14769,medium,后围板/尾板 - eBay 无独立 Rear Body 类目
+195,Relays,262222,Relays,262089,high,同名匹配
+196,Resistors,262078,HVAC Blower Modules & Resistors,33578,medium,电阻多为鼓风机调速电阻
+197,Rocker Panel,262166,Body Side & Quarter Panels,262168,medium,门槛板归侧围类
+198,Roof,262171,"Hardtops, Roof Panels & Parts",262172;262173,high,车顶板 + 天窗
+199,Seats,33701,Seats,262201;33702;262200,high,座椅 + 零件 + 座套 + 头枕
+200,Secondary Ignition,174072,Spark Plugs,33692;262183,medium,次级点火: 火花塞/高压线/线圈
+201,Sending Units,33555,Fuel Pumps & Sending Units,262123,medium,传感器发送单元: 油浮子为主 / 水温 262123
+202,Sensors,262125,Engine Sensors & Switches,63276;262086;173863;174106;179696,low,传感器跨全车 - 强烈建议按 Part 级细分: 氧传 63276 / ABS 262086 / 胎压 179696
+203,Shocks and Struts,33590,"Shocks, Struts & Assemblies",262228,high,减震器 + 顶胶
+204,Side Pillar,262168,Additional Panels,262166,medium,ABC 柱 - eBay 无独立类目
+205,Spare Tire and Wheel,262174,Spare Tire Carriers & Covers,262265;179679,medium,备胎架/罩; 备胎本体归 Wheels
+206,Starter and Related Components,177699,Starter Motors,177700,high,起动机 + 零件
+207,Steering Column,174093,Steering Columns,,high,同名匹配
+208,Steering Wheel,33704,Steering Wheels & Horn Buttons,180120,high,方向盘 + 盘套
+210,"Suspension, Springs and Related Components",33582,Leaf & Coil Springs,33590;174090,high,弹簧 + 减震 + 悬挂套件
+211,"Switches, Solenoids and Actuators",50459,Switches & Controls,261897;262083,medium,开关/电磁阀跨系统
+212,Tailgate and Midgate,262178,Tailgates,33647,high,皮卡尾门 262178 / SUV 尾门 33647
+214,Tire,179680,Tires,179681,high,轮胎
+215,Towing,33653,Trailer Hitches,180145;38790;173832,high,拖车钩 + 球头 + 拖车镜
+216,Transmission Bands,33727,Automatic Transmission Parts,,high,变速箱制动带归 AT 零件
+217,Transmission Bushings,33727,Automatic Transmission Parts,262229,medium,变速箱衬套
+219,Transmission Hard Parts,33727,Automatic Transmission Parts,33733,medium,变速箱硬件 AT/MT 各自类目
+220,Transmission Valve Body,33727,Automatic Transmission Parts,,high,阀体归 AT 零件
+221,Transfer Case Components,262257,Transfer Case Parts,262256,high,分动箱零件 + 总成
+222,Truck Box,262177,Truck Beds & Repair Sections,33655;262176,high,皮卡货箱 + 修补件
+223,Truck Cab,262168,Additional Panels,14769,low,卡车驾驶室钣金 - eBay 无独立类目
+224,Trunk Lid and Compartment,33656,Hatches & Trunk Lids,262150,high,后备箱盖
+225,"Turbocharger, Supercharger and Ram Air",33742,Turbos & Parts,33741;262073,high,涡轮 + 机械增压 + 中冷
+226,Vacuum System,33626,Vacuum Pumps,42604,medium,真空泵 + 真空管路
+227,Valve Train Components,33621,Valves,33624;61338;262139;262140,high,气门 + 摇臂 + 挺柱 + 推杆
+228,Valves,33621,Valves,262080;33606,low,阀类跨系统: 发动机气门为主 - 需按上下文细分
+229,Voltage Regulator,33577,Voltage Regulators,,high,同名匹配
+230,Warning Buzzers,262065,Alert & Warning Devices,50459,medium,警报蜂鸣器
+231,Water Pump and Related Components,33604,Water Pumps,,high,同名匹配
+233,Wheel,179679,Wheels,179681;43961,high,轮毂
+234,"Wheel Bearings, Seals, and Related Components",170141,"Wheel Bearings, Hubs & Seals",,high,同名匹配
+235,Windshield Washer and Related Components,174112,"Washer Pumps, Reservoirs & Nozzles",262179,high,喷水壶泵 + 喷嘴
+236,"Wiper Arm, Blade, and Related Components",179852,Wiper Blades & Refills,174113;61941,high,雨刮片 + 雨刮臂 + 连杆电机
+238,Wiper and Washer Sensors,262179,Additional Wiper & Washer Components,174112,medium,雨量传感器 - eBay 无独立类目
+240,"Wire, Cable and Related Components",179847,"Wiring Harnesses, Cables & Connectors",262210;262092,medium,通用电线电缆
+243,Tubing,173950,"Hoses, Lines & Pipes",33561,low,通用管材
+244,Ignition Wire and Related Components,33692,Ignition Wires & Coil Boots,,high,高压线
+246,"Hardware, Fasteners and Fittings",262164,"Mounts, Brackets & Hardware",262193;33749,low,通用紧固件跨全车
+247,Automatic Transmission Components,33727,Automatic Transmission Parts,171115;63692,high,AT 零件 + 整箱 + 液力变矩器
+248,Brake System Service,,,,none,服务类 - 非零件
+249,"Shop Equipment, Tools and Accessories",,,,none,车间设备 - 非零件
+250,Books and Manuals,,,,none,手册在 Manuals & Literature(6029) 子树 - 不在范围
+251,Decals and Emblems,33643,Emblems & Ornaments,50445,high,车标 + 贴纸
+252,Hatch,33647,Liftgates,33656,high,掀背尾门
+253,Vacuum Power System,174021,Brake Boosters,33626,medium,真空助力主要指刹车助力泵
+254,CV Components,33729,"CV Joints, Boots & Parts",262243,high,球笼 + 半轴总成
+255,Water System Service,,,,none,服务类 - 非零件
+258,Safety Products,9886,Other Car & Truck Parts & Accessories,,low,安全用品 - 太泛
+259,Cleaning Products,,,,none,清洁用品 - 非零件
+261,Signage,,,,none,标识牌 - 非零件
+262,"Wax, Polishes and Detailers",,,,none,美容用品 - 非零件
+263,Miscellaneous Merchandise,,,,none,杂货 - 非零件
+264,Battery Service,,,,none,服务类 - 非零件
+266,Nitrous Oxide Injection System,,,,none,氮气加速在 Performance & Racing 子树 - 不在范围
+267,Software,,,,none,软件 - 非零件
+268,Tire Service,,,,none,服务类 - 非零件
+269,Plating Products,,,,none,电镀用品 - 非零件
+270,Furniture,,,,none,家具 - 非汽车
+272,Raw Materials,,,,none,原材料 - 非零件
+273,Handlebar and Controls,,,,none,车把类 - powersports 摩托车范围
+275,Chassis and Suspension Service,,,,none,服务类 - 非零件
+277,Pit Equipment,,,,none,维修站设备 - 非零件
+279,Water Injection System and Components,42604,Other Air & Fuel Delivery,,low,水喷射 - 小众改装
+282,Emission Components,262143,Emissions Hardware & Components,46097,high,排放硬件
+283,Universal,9886,Other Car & Truck Parts & Accessories,,low,通用件 - 太泛
+284,Transmission Service,,,,none,服务类 - 非零件
+285,Air Heater Components,262081,Heater Cores,46094,low,驻车加热器 - eBay 无独立类目
+288,A/C Service,,,,none,服务类 - 非零件
+289,Side Body,262166,Body Side & Quarter Panels,262168,high,侧围
+290,"Adhesives, Sealants and Tape",,,,none,胶粘剂 - 非零件
+292,Carbon Dioxide Injection System,,,,none,CO2 喷射 - 小众无对应
+294,Hydraulic System Service,,,,none,服务类 - 非零件
+297,Differential Service,,,,none,服务类 - 非零件
+299,Van Storage,262203,Additional Storage & Organizers,63690,medium,厢式车储物
+301,Driveline,262251,Driveshafts,262252;46104,medium,传动系泛称
+303,Accessory Drive Belt System Components,262060,Belts,262061;262062;262063,high,附件皮带 + 张紧轮 + 皮带轮
+304,Drive Chain and Belt Components,262060,Belts,262135;262134,medium,驱动链条/皮带
+305,Automatic Dual Clutch Transmission Components,33727,Automatic Transmission Parts,262241,medium,DCT 零件 - eBay 无独立类目归 AT
+308,Undercar,14769,Other Exterior Parts & Accessories,,low,底盘泛称 - 太宽
+309,Underhood,9886,Other Car & Truck Parts & Accessories,,low,机舱泛称 - 太宽
+311,Information Labels,,,,none,信息标签 - 非零件
+315,Service Kits,174087,Service Kits,173511,medium,保养套件: 发动机保养 174087 / 刹车套件 173511
+316,"Steering, Gear and Related Components",33589,"Gearboxes, Rack & Pinions",262223;33593,high,转向机 + 零件 + 拉杆
+317,Bearings,170141,"Wheel Bearings, Hubs & Seals",33619;262246,low,轴承跨系统: 轮毂为主 / 发动机 33619 / 差速器 262246
+318,"Motors, Core, Case and Related Components",33615,Engines,61304,medium,发动机总成/机芯
+319,Temperature Controls and Related Components,33545,HVAC Controls & Control Units,173863,high,温度控制面板
+320,A/C Flow Restrictors,262074,A/C Expansion Valves,46094,medium,节流孔管归膨胀阀类
+322,Distributor and Magneto,33690,Distributors,262180;262181;262182,high,分电器 + 盖 + 转子
+323,Ignition Coil,262183,Ignition Coils,,high,同名匹配
+324,Alignment,33581,Camber & Caster Parts,42609,high,四轮定位调整件
+328,Assortments,,,,none,杂件组合装 - 非单一零件
+330,"Lawn and Garden Equipment, Tools and Accessories",,,,none,园艺设备 - 非汽车
+337,Cooling System Service,,,,none,服务类 - 非零件
+339,RV and Marine Accessories,,,,none,房车/船艇在各自子树 - 不在范围
+340,Displays and Merchandisers,,,,none,陈列用具 - 非零件
+343,Horns,262159,Horns,,high,同名匹配
+344,Ignition Service,,,,none,服务类 - 非零件
+345,Power Steering Service,,,,none,服务类 - 非零件
+346,Welding Equipment,,,,none,焊接设备 - 非零件
+347,Winch,,,,none,绞盘 - eBay Car&Truck leaf 无对应
+356,Body Actuators and Motors,33706,Window Motors & Regulators,33648;262194,low,车身执行器: 玻璃升降/门锁执行器 - 需按上下文细分
+357,Dashboard,262191,Dash Panels,33698,high,仪表台
+359,Telematics Systems and Components,,,,none,车联网在 In-Car Technology 子树 - 不在范围
+376,Thermostat and Housing,33603,Thermostats & Housings,,high,同名匹配
+391,Front Body,262168,Additional Panels,14769,medium,前部车身钣金 - eBay 无独立类目
+392,CV Boots and Related Components,33729,"CV Joints, Boots & Parts",,high,球笼防尘套
+393,Hubs and Related Components,170141,"Wheel Bearings, Hubs & Seals",,high,轮毂单元
+436,Waste Disposal Equipment,,,,none,垃圾处理设备 - 非汽车
+437,Powersport Accessories,,,,none,powersports 配件 - 不在范围
+438,Pest Control,,,,none,非汽车
+441,"Personal Care, Health and Wellness",,,,none,非汽车
+442,Transmission Components,33727,Automatic Transmission Parts,33733;46104,medium,变速箱零件泛称
+443,Kitchen and Dining,,,,none,非汽车
+444,Pumps,33555,Fuel Pumps & Sending Units,33604;33588,low,泵类跨系统: 油泵/水泵/转向泵 - 需按上下文细分
+445,"Clothing, Shoes, Jewelry and Accessories",,,,none,非汽车
+446,Bed and Bath,,,,none,非汽车
+447,Food and Drink,,,,none,非汽车
+448,Office Supplies,,,,none,非汽车
+449,Storage and Organization,262203,Additional Storage & Organizers,63690,medium,车内储物
+450,Fresh Water Pump and Related Components,,,,none,房车水泵 - 不在范围
+451,Bushings,262229,Steering & Suspension Bushings,33592,medium,衬套以悬挂为主
+452,Paint and Coatings,,,,none,油漆 - 非零件
+453,Conditioners and Protectants,,,,none,养护品 - 非零件
+454,Cleaners and Removers,,,,none,清洁剂 - 非零件
+455,Sports and Outdoors,,,,none,非汽车
+456,Underhood Accessories,9886,Other Car & Truck Parts & Accessories,,low,机舱配件 - 太泛
+457,Exterior Accessories,14769,Other Exterior Parts & Accessories,,medium,外饰配件兜底
+458,Interior Accessories,9887,Other Interior Parts & Accessories,,medium,内饰配件兜底
+459,Sleeper Cab,262168,Additional Panels,,low,卡车卧铺舱 - eBay 无独立类目
+460,Appliances,,,,none,家电 - 非汽车
+461,Electronics and Toys,,,,none,非汽车
+463,Travel Accessories,,,,none,非汽车
+464,"Cleaning Tools, Equipment and Supplies",,,,none,清洁工具 - 非零件
+465,Marine Vehicles and Equipment,,,,none,船艇 - 不在范围
+467,Industrial Equipment and Accessories,,,,none,工业设备 - 非汽车
+468,Construction Equipment and Accessories,,,,none,工程设备 - 非汽车
+469,Agricultural Equipment,,,,none,农机 - 非汽车
+470,Powersport Vehicles,,,,none,摩托车整车 - 不在范围
+471,Medium and Heavy Duty Vehicles,,,,none,中重卡在 Commercial Truck 子树 - 不在范围
+472,Light Duty Vehicles,,,,none,整车 - 非零件
+473,Power Generation Equipment,,,,none,发电设备 - 非汽车
+474,Power Take Off Unit (PTU) and Components,46104,Other Transmission & Drivetrain,,low,PTU 无独立类目
+475,Pet Supplies and Accessories,,,,none,宠物用品 - 非汽车
+476,Underbody,14769,Other Exterior Parts & Accessories,,low,底盘泛称
+477,"Welding Equipment, Tools and Accessories",,,,none,焊接工具 - 非零件
+478,"Safety Equipment, Tools and Accessories",,,,none,安全装备 - 非零件
+479,"Paint Equipment, Tools and Accessories",,,,none,喷漆设备 - 非零件
+480,"Tow, Hoist and Lift Tools and Accessories",38790,Other Towing Parts,,low,拖车工具类 - 勉强归 Other Towing
+481,"Power, Air, and Hand Tools and Accessories",,,,none,工具 - 非零件
+482,Outdoor Cooking,,,,none,非汽车
+483,Foot Controls,33700,"Pedal Assemblies, Pads & Parts",174078,high,踏板总成 + 手刹杆

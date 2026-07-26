@@ -310,8 +310,22 @@ model PcdbSubCategory {
   id             Int                @id // SubCategoryID
   name           String // SubCategoryName
   partCategories PcdbPartCategory[]
+  mapping        PcdbToEbayMapping?
 
   @@index([name])
+}
+
+// PCdb SubCategory → eBay category 映射 (初稿, 人工 + LLM 生成)
+model PcdbToEbayMapping {
+  id              Int             @id @default(autoincrement())
+  subCategoryId   Int             @unique
+  primaryEbayId   Int? // 可空 (none 类型无映射)
+  fallbackEbayIds Int[]           @default([]) // 备选 eBay categoryId 数组
+  confidence      String // high / medium / low / none
+  note            String?
+  subCategory     PcdbSubCategory @relation(fields: [subCategoryId], references: [id])
+
+  @@index([subCategoryId])
 }
 
 model PcdbPart {
