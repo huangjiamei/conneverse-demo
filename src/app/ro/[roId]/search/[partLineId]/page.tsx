@@ -141,6 +141,7 @@ export default async function SearchPage({
                     optimizerRank: c.optimizerRank,
                     optimizerTotal: c.optimizerTotal,
                     optimizerPriceScore: c.optimizerPriceScore,
+                    optimizerSpeedScore: c.optimizerSpeedScore,
                     optimizerQualityScore: c.optimizerQualityScore,
                     optimizerGateReason: c.optimizerGateReason,
                     brand,

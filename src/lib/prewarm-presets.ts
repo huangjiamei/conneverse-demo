@@ -13,11 +13,13 @@ import { prisma } from "@/lib/prisma";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
+// V2 四个 preset (与前端 Job Status / matcher presets.py 对齐)。
+// prewarm 只跑这 4 个 → pick 徽章只出 V2 名, 不再冒旧名重复徽章。
 export const ALL_PRESETS = [
-  "sameDayJob",
-  "costFirst",
-  "qualityFirst",
-  "scheduled",
+  "Rush",
+  "Balanced",
+  "Budget",
+  "Premium",
 ] as const;
 
 type RawCandidate = {
@@ -37,6 +39,7 @@ type RerankResult = {
       rank: number;
       total: number;
       price_score: number;
+      speed_score: number;
       quality_score: number;
     }>;
     rejected?: Array<{ item_id: string; reason: string }>;
@@ -92,6 +95,7 @@ export async function prewarmOtherPresets(opts: {
             rank: number | null;
             total: number | null;
             priceScore: number | null;
+            speedScore: number | null;
             qualityScore: number | null;
             gateReason: string | null;
           }
@@ -101,6 +105,7 @@ export async function prewarmOtherPresets(opts: {
             rank: e.rank,
             total: e.total,
             priceScore: e.price_score,
+            speedScore: e.speed_score,
             qualityScore: e.quality_score,
             gateReason: null,
           });
@@ -110,6 +115,7 @@ export async function prewarmOtherPresets(opts: {
             rank: null,
             total: null,
             priceScore: null,
+            speedScore: null,
             qualityScore: null,
             gateReason: r.reason,
           });
@@ -120,6 +126,7 @@ export async function prewarmOtherPresets(opts: {
             rank: null,
             total: null,
             priceScore: null,
+            speedScore: null,
             qualityScore: null,
             gateReason: null,
           };
@@ -130,6 +137,7 @@ export async function prewarmOtherPresets(opts: {
             rank: r.rank,
             total: r.total,
             priceScore: r.priceScore,
+            speedScore: r.speedScore,
             qualityScore: r.qualityScore,
             gateReason: r.gateReason,
           };

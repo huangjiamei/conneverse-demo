@@ -53,6 +53,7 @@ export type Candidate = {
   optimizerRank: number | null;
   optimizerTotal: number | null;
   optimizerPriceScore: number | null;
+  optimizerSpeedScore: number | null;
   optimizerQualityScore: number | null;
   optimizerGateReason: string | null;
   brand: string | null;
@@ -189,7 +190,7 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
   {isRanked && candidate.optimizerTotal != null && (
     <span
       className="text-[10px] text-gray-400"
-      title={`price: ${candidate.optimizerPriceScore?.toFixed(0)} | quality: ${candidate.optimizerQualityScore?.toFixed(0)}`}
+      title={`price: ${candidate.optimizerPriceScore?.toFixed(0) ?? "—"} | speed: ${candidate.optimizerSpeedScore?.toFixed(0) ?? "—"} | quality: ${candidate.optimizerQualityScore?.toFixed(0) ?? "—"}`}
     >
       Score {candidate.optimizerTotal.toFixed(0)}
     </span>

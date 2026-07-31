@@ -20,17 +20,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prewarmOtherPresets, computePickInPresets } from "@/lib/prewarm-presets";
+import { VALID_PRESET_SET, DEFAULT_PRESET } from "@/lib/presets";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
-
-// 未传 preset 时的兜底。前端 (Job Status 胶囊) 现在会显式传 preset。
-const DEFAULT_PRESET = "sameDayJob";
-const VALID_PRESETS = new Set([
-  "sameDayJob",
-  "costFirst",
-  "qualityFirst",
-  "scheduled",
-]);
 
 type Body = {
   vehicleId?: number;
@@ -83,6 +75,7 @@ type OptimizerResult = {
     rank: number;
     total: number;
     price_score: number;
+    speed_score: number;
     quality_score: number;
   }>;
   rejected?: Array<{ item_id: string; reason: string }>;
@@ -119,7 +112,7 @@ export async function POST(req: Request) {
   }
 
   // preset: 只接受已知值, 否则回落默认 (防止透传乱字符串给 matcher)
-  const preset = VALID_PRESETS.has(body.preset ?? "")
+  const preset = VALID_PRESET_SET.has(body.preset ?? "")
     ? (body.preset as string)
     : DEFAULT_PRESET;
 
@@ -264,6 +257,7 @@ export async function POST(req: Request) {
       rank?: number;
       total?: number;
       priceScore?: number;
+      speedScore?: number;
       qualityScore?: number;
       gateReason?: string;
     }
@@ -273,6 +267,7 @@ export async function POST(req: Request) {
       rank: e.rank,
       total: e.total,
       priceScore: e.price_score,
+      speedScore: e.speed_score,
       qualityScore: e.quality_score,
     });
   }
@@ -336,6 +331,7 @@ export async function POST(req: Request) {
             optimizerRank: opt.rank ?? null,
             optimizerTotal: opt.total ?? null,
             optimizerPriceScore: opt.priceScore ?? null,
+            optimizerSpeedScore: opt.speedScore ?? null,
             optimizerQualityScore: opt.qualityScore ?? null,
             optimizerGateReason: opt.gateReason ?? null,
           };
@@ -354,6 +350,7 @@ export async function POST(req: Request) {
       rank: c.optimizerRank,
       total: c.optimizerTotal,
       priceScore: c.optimizerPriceScore,
+      speedScore: c.optimizerSpeedScore,
       qualityScore: c.optimizerQualityScore,
       gateReason: c.optimizerGateReason,
     })),
@@ -410,6 +407,7 @@ export async function POST(req: Request) {
       optimizerRank: c.optimizerRank,
       optimizerTotal: c.optimizerTotal,
       optimizerPriceScore: c.optimizerPriceScore,
+      optimizerSpeedScore: c.optimizerSpeedScore,
       optimizerQualityScore: c.optimizerQualityScore,
       optimizerGateReason: c.optimizerGateReason,
       brand: brandByItemId.get(c.ebayItemId) ?? null,

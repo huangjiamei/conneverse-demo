@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  Loader2, Search, Wrench, DollarSign, Award, Calendar, Car,
+  Loader2, Search, Gauge, Scale, DollarSign, Award, Car,
   ChevronDown, ChevronUp, X,
 } from "lucide-react";
 import { type Candidate } from "@/components/CandidateCard";
@@ -32,12 +32,12 @@ const POPULAR = [
   { year: 2021, makeName: "Chevrolet", modelName: "Silverado 1500" },
 ] as const;
 
-// Job Status preset 胶囊 —— key 与 matcher 的 preset 对齐
+// Job Status preset 胶囊 —— key 与 matcher V2 的 preset 对齐
 const PRESET_OPTIONS = [
-  { key: "sameDayJob", label: "Car on lift", Icon: Wrench },
-  { key: "costFirst", label: "Cost first", Icon: DollarSign },
-  { key: "qualityFirst", label: "Quality first", Icon: Award },
-  { key: "scheduled", label: "Scheduled", Icon: Calendar },
+  { key: "Rush", label: "Rush", Icon: Gauge },
+  { key: "Balanced", label: "Balanced", Icon: Scale },
+  { key: "Budget", label: "Budget", Icon: DollarSign },
+  { key: "Premium", label: "Premium", Icon: Award },
 ] as const;
 
 type YearOpt = { id: number };
@@ -104,8 +104,8 @@ export default function VehicleSearchClient() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingSubmodels, setLoadingSubmodels] = useState(false);
 
-  // Job Status preset (默认 sameDayJob)
-  const [preset, setPreset] = useState<string>("sameDayJob");
+  // Job Status preset (默认 Balanced)
+  const [preset, setPreset] = useState<string>("Balanced");
   const [switchingPreset, setSwitchingPreset] = useState<string | null>(null);
 
   // 零件信息 + 搜索

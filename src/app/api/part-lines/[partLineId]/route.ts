@@ -26,7 +26,17 @@ export async function PATCH(
     partNumber?: string | null; 
     selectedPreset?: string; 
   } = {};
-  const VALID_PRESETS = ["sameDayJob", "costFirst", "qualityFirst", "scheduled"];
+  // V2 的四个 preset + 老名别名 (matcher 侧 PRESETS 两套都收, 见 presets.py)
+  const VALID_PRESETS = [
+    "Rush",
+    "Balanced",
+    "Budget",
+    "Premium",
+    "sameDayJob",
+    "costFirst",
+    "qualityFirst",
+    "scheduled",
+  ];
 
   if (typeof body.partDescription === "string") {
     data.partDescription = body.partDescription;

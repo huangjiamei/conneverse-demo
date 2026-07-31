@@ -42,26 +42,27 @@ type Props = {
 // Preset metadata (显示用)
 // ============================================================
 
+// V2 preset (key 与 matcher / DB 对齐)
 const PRESETS = [
   {
-    key: "sameDayJob",
-    label: "Same-day job",
+    key: "Rush",
+    label: "Rush",
     description: "Need it today, strict on seller & US only",
   },
   {
-    key: "costFirst",
-    label: "Cost first",
+    key: "Balanced",
+    label: "Balanced",
+    description: "Balance price / speed / quality (default)",
+  },
+  {
+    key: "Budget",
+    label: "Budget",
     description: "Cheapest wins, seller looser",
   },
   {
-    key: "qualityFirst",
-    label: "Quality first",
+    key: "Premium",
+    label: "Premium",
     description: "Highest-rated sellers, big brands",
-  },
-  {
-    key: "scheduled",
-    label: "Scheduled",
-    description: "Not urgent, allow backorder & overseas",
   },
 ] as const;
 
@@ -311,12 +312,8 @@ export default function SearchClient({
     {PRESETS.map((p) => {
       const isSelected = selectedPreset === p.key;
       const isLoading = switchingPreset === p.key;
-      // 短标签 (胶囊上显示)
-      const shortLabel =
-        p.key === "sameDayJob" ? "Same-day"
-        : p.key === "costFirst" ? "Cost"
-        : p.key === "qualityFirst" ? "Quality"
-        : "Schedule";
+      // V2 名字本身就短, 直接用 label
+      const shortLabel = p.label;
       return (
         <button
           key={p.key}

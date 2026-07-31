@@ -69,7 +69,7 @@ model PartLine {
   quantity        Int     @default(1)
 
   //用户偏好
-  selectedPreset String @default("sameDayJob")
+  selectedPreset String @default("Balanced")
 
   // 关系
   historicalPurchase HistoricalPurchase? // CCC 里"这家店过去实际怎么买的"
@@ -173,6 +173,7 @@ model Candidate {
   optimizerRank         Int?
   optimizerTotal        Float?
   optimizerPriceScore   Float?
+  optimizerSpeedScore   Float?
   optimizerQualityScore Float?
   optimizerGateReason   String?
 
@@ -225,6 +226,7 @@ model OptimizerResult {
   rank         Int?
   total        Float?
   priceScore   Float?
+  speedScore   Float?
   qualityScore Float?
   gateReason   String?
 

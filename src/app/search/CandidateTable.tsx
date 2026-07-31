@@ -22,12 +22,13 @@ import {
 } from "@/components/CandidateCard";
 import { useSourcing } from "./SourcingContext";
 
-// preset → pick tag 文案 + 配色 (沿用设计 token: teal=Ready Now, amber=Best Price)
+// preset → pick tag 文案 + 配色。key = V2 四名, 文案与 Job Status 按钮一致
+// (Rush / Balanced / Budget / Premium)。teal=速度, amber=价格, violet=质量。
 const PICK_TAG: Record<string, { label: string; className: string }> = {
-  sameDayJob: { label: "Same-day pick", className: "bg-teal-50 text-teal-700" },
-  costFirst: { label: "Best price pick", className: "bg-amber-50 text-amber-700" },
-  qualityFirst: { label: "Quality pick", className: "bg-violet-50 text-violet-700" },
-  scheduled: { label: "Scheduled pick", className: "bg-slate-100 text-slate-600" },
+  Rush: { label: "Rush pick", className: "bg-teal-50 text-teal-700" },
+  Balanced: { label: "Balanced pick", className: "bg-slate-100 text-slate-600" },
+  Budget: { label: "Budget pick", className: "bg-amber-50 text-amber-700" },
+  Premium: { label: "Premium pick", className: "bg-violet-50 text-violet-700" },
 };
 
 function PickTag({ preset }: { preset: string }) {
@@ -237,10 +238,13 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
                     ${c.price}
                   </td>
 
-                  {/* SCORE / Filtered */}
+                  {/* SCORE (总分 + speed 小字) / Filtered */}
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     {c.optimizerTotal != null ? (
-                      <span className="text-gray-700 tabular-nums">
+                      <span
+                        className="text-gray-700 tabular-nums cursor-help"
+                        title={`price: ${c.optimizerPriceScore?.toFixed(0) ?? "—"} | speed: ${c.optimizerSpeedScore?.toFixed(0) ?? "—"} | quality: ${c.optimizerQualityScore?.toFixed(0) ?? "—"}`}
+                      >
                         {c.optimizerTotal.toFixed(0)}
                       </span>
                     ) : isGated ? (

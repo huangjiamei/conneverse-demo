@@ -17,10 +17,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computePickInPresets } from "@/lib/prewarm-presets";
+import { VALID_PRESET_SET, VALID_PRESETS } from "@/lib/presets";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
-
-const VALID_PRESETS = ["sameDayJob", "costFirst", "qualityFirst", "scheduled"];
 
 type Body = {
   matchSearchId?: string;
@@ -63,6 +62,7 @@ type RerankResult = {
       rank: number;
       total: number;
       price_score: number;
+      speed_score: number;
       quality_score: number;
     }>;
     rejected: Array<{ item_id: string; reason: string }>;
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (!VALID_PRESETS.includes(preset)) {
+  if (!VALID_PRESET_SET.has(preset)) {
     return NextResponse.json(
       { error: `Invalid preset: ${preset}. Valid: ${VALID_PRESETS.join(", ")}` },
       { status: 400 }
@@ -117,6 +117,7 @@ export async function POST(req: Request) {
     rank: number | null;
     total: number | null;
     priceScore: number | null;
+    speedScore: number | null;
     qualityScore: number | null;
     gateReason: string | null;
   };
@@ -132,6 +133,7 @@ export async function POST(req: Request) {
         rank: c.rank,
         total: c.total,
         priceScore: c.priceScore,
+        speedScore: c.speedScore,
         qualityScore: c.qualityScore,
         gateReason: c.gateReason,
       });
@@ -198,6 +200,7 @@ export async function POST(req: Request) {
         rank?: number;
         total?: number;
         priceScore?: number;
+        speedScore?: number;
         qualityScore?: number;
         gateReason?: string;
       }
@@ -207,6 +210,7 @@ export async function POST(req: Request) {
         rank: e.rank,
         total: e.total,
         priceScore: e.price_score,
+        speedScore: e.speed_score,
         qualityScore: e.quality_score,
       });
     }
@@ -222,6 +226,7 @@ export async function POST(req: Request) {
       rank: number | null;
       total: number | null;
       priceScore: number | null;
+      speedScore: number | null;
       qualityScore: number | null;
       gateReason: string | null;
     }> = [];
@@ -232,6 +237,7 @@ export async function POST(req: Request) {
         rank: r.rank ?? null,
         total: r.total ?? null,
         priceScore: r.priceScore ?? null,
+        speedScore: r.speedScore ?? null,
         qualityScore: r.qualityScore ?? null,
         gateReason: r.gateReason ?? null,
       };
@@ -257,6 +263,7 @@ export async function POST(req: Request) {
         rank: null,
         total: null,
         priceScore: null,
+        speedScore: null,
         qualityScore: null,
         gateReason: null,
       };
@@ -266,6 +273,7 @@ export async function POST(req: Request) {
           optimizerRank: r.rank,
           optimizerTotal: r.total,
           optimizerPriceScore: r.priceScore,
+          optimizerSpeedScore: r.speedScore,
           optimizerQualityScore: r.qualityScore,
           optimizerGateReason: r.gateReason,
         },
@@ -340,6 +348,7 @@ export async function POST(req: Request) {
         optimizerRank: c.optimizerRank,
         optimizerTotal: c.optimizerTotal,
         optimizerPriceScore: c.optimizerPriceScore,
+        optimizerSpeedScore: c.optimizerSpeedScore,
         optimizerQualityScore: c.optimizerQualityScore,
         optimizerGateReason: c.optimizerGateReason,
         brand,
