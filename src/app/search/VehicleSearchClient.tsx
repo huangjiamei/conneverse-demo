@@ -15,10 +15,12 @@
 import { useEffect, useState } from "react";
 import {
   Loader2, Search, Gauge, Scale, DollarSign, Award, Car,
-  ChevronDown, ChevronUp, X,
+  ChevronDown, ChevronUp, X, Clock,
 } from "lucide-react";
+import Link from "next/link";
 import { type Candidate } from "@/components/CandidateCard";
 import { CandidateTable } from "./CandidateTable";
+import { PRESET_META, PRESET_COLORS } from "./presetMeta";
 import { useSourcing } from "./SourcingContext";
 import { applyPositions } from "@/constants/positionWords";
 
@@ -530,11 +532,22 @@ export default function VehicleSearchClient() {
     <>
       {/* 顶部深蓝 banner */}
       <div className="bg-[#1A1A2E] text-white rounded-xl p-6">
-        <div className="text-xs text-white/50 tracking-wide">Vehicle lookup</div>
-        <div className="mt-1 text-2xl font-semibold">New search</div>
-        <div className="mt-1 text-xs text-white/40">
-          Pick a vehicle from the ACES / VCdb catalog, then search parts — no repair
-          order needed.
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs text-white/50 tracking-wide">Vehicle lookup</div>
+            <div className="mt-1 text-2xl font-semibold">New search</div>
+            <div className="mt-1 text-xs text-white/40">
+              Pick a vehicle from the ACES / VCdb catalog, then search parts — no
+              repair order needed.
+            </div>
+          </div>
+          <Link
+            href="/search/history"
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/20 text-white/80 text-xs hover:bg-white/10 transition"
+          >
+            <Clock size={13} />
+            History
+          </Link>
         </div>
       </div>
 
@@ -995,7 +1008,7 @@ export default function VehicleSearchClient() {
                     disabled={switchingPreset != null}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[13px] transition disabled:opacity-60 ${
                       selected
-                        ? "bg-teal-50 border-[#00B4A6] text-[#00B4A6]"
+                        ? "bg-[#00B4A6] border-[#00B4A6] text-white font-medium"
                         : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
                     }`}
                   >
@@ -1042,13 +1055,31 @@ export default function VehicleSearchClient() {
       {result && !searching && (
         <div className="mt-6">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide flex items-center gap-2">
               Verified candidates ({verified.length})
-              {result.optimizerMeta && result.optimizerMeta.eligibleCount > 0 && (
-                <span className="ml-2 text-xs font-normal text-gray-400 normal-case tracking-normal">
-                  · ranked by {result.optimizerMeta.preset}
-                </span>
-              )}
+              {result.optimizerMeta &&
+                result.optimizerMeta.eligibleCount > 0 &&
+                result.optimizerMeta.preset &&
+                (() => {
+                  const meta = PRESET_META[result.optimizerMeta.preset];
+                  const color = PRESET_COLORS[result.optimizerMeta.preset];
+                  if (!meta || !color) return null;
+                  const { Icon } = meta;
+                  return (
+                    <span
+                      style={{
+                        backgroundColor: color.bg,
+                        color: color.text,
+                        borderColor: color.text,
+                        borderWidth: "1.5px",
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold normal-case tracking-normal"
+                    >
+                      <Icon size={11} />
+                      Ranked by {meta.label}
+                    </span>
+                  );
+                })()}
             </h2>
           </div>
 
@@ -1057,7 +1088,7 @@ export default function VehicleSearchClient() {
               No verified matches. Try adjusting the description or part number.
             </div>
           ) : (
-            <CandidateTable candidates={verified} />
+            <CandidateTable candidates={verified} currentPreset={preset} />
           )}
 
           {others.length > 0 && (
@@ -1081,7 +1112,7 @@ export default function VehicleSearchClient() {
               </button>
               {showOthers && (
                 <div className="mt-2">
-                  <CandidateTable candidates={others} />
+                  <CandidateTable candidates={others} currentPreset={preset} />
                 </div>
               )}
             </div>

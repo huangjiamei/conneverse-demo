@@ -195,6 +195,7 @@ export async function POST(req: Request) {
   const brandByItemId = new Map<string, string>();
   const compatByItemId = new Map<string, Record<string, unknown>>();
   const additionalImagesByItemId = new Map<string, string[]>();
+  const partNumbersByItemId = new Map<string, string[]>();
   for (const c of candidates) {
     if (!c.item_id) continue;
     if (c.optimizer_fields) enrichedByItemId.set(c.item_id, c.optimizer_fields);
@@ -204,6 +205,9 @@ export async function POST(req: Request) {
     compatByItemId.set(c.item_id, compat);
     if (c.additional_image_urls?.length) {
       additionalImagesByItemId.set(c.item_id, c.additional_image_urls);
+    }
+    if (c.part_number_list?.length) {
+      partNumbersByItemId.set(c.item_id, c.part_number_list);
     }
   }
 
@@ -319,6 +323,7 @@ export async function POST(req: Request) {
       enrichedFields: enrichedByItemId.get(c.ebayItemId) ?? null,
       compatibility: compatByItemId.get(c.ebayItemId) ?? null,
       additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
+      partNumbers: partNumbersByItemId.get(c.ebayItemId) ?? [],
       pickInPresets: pickMap.get(c.id) ?? [],
     })),
     meta: {

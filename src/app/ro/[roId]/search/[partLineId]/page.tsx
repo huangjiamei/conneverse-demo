@@ -151,6 +151,7 @@ export default async function SearchPage({
                     imageUrl: c.imageUrl,
                     additionalImageUrls:
                       (raw as any)?.additional_image_urls ?? [],
+                    partNumbers: (raw as any)?.part_number_list ?? [],
                   };
                 }),
               }

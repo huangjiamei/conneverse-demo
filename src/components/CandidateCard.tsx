@@ -13,7 +13,7 @@
 import { useState } from "react";
 import {
   Check, ExternalLink, Award, ChevronDown, ChevronUp,
-  Truck, Star, Shield, RotateCcw, Package,
+  Truck, Star, Shield, RotateCcw, Package, Boxes,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -60,6 +60,9 @@ export type Candidate = {
   enrichedFields: EnrichedFields | null;
   compatibility: Record<string, unknown> | null;
   additionalImageUrls: string[];
+  // 从 eBay localizedAspects 抽的零件号 (MPN/OE/Interchange 混合的扁平列表,
+  // matcher 的 part_number_list —— 类型已在抽取时合并, 不分 MPN/OE/Interchange)。
+  partNumbers?: string[];
   // 该候选在哪些 preset 下是 Rank 1 (从 OptimizerResult 表算)。用于 pick tag。
   pickInPresets?: string[];
 };
@@ -103,6 +106,53 @@ export function parseSellerPct(
   if (typeof v === "number") return v;
   if (v) return Number(v);
   return null;
+}
+
+/**
+ * 把 optimizer 的机器可读 gate 原因 (category:detail) 翻成人话。
+ * 供 Filtered 徽章 tooltip 用。未知 code 原样兜底, 不吞。
+ *
+ * 原因格式来自 matcher gates.py:
+ *   condition:for_parts / condition:not_new:<id> / condition:used:<id>
+ *   stock:<status> · seller_feedback:<pct>% · seller_count:<n>
+ *   delivery:<a>d><b>d · country:<code> · fitment_risk:<pct>%
+ */
+export function humanizeGateReason(
+  reason: string | null | undefined
+): string | null {
+  if (!reason) return null;
+  const idx = reason.indexOf(":");
+  const cat = idx === -1 ? reason : reason.slice(0, idx);
+  const detail = idx === -1 ? "" : reason.slice(idx + 1);
+
+  switch (cat) {
+    case "condition":
+      if (detail === "for_parts")
+        return "For-parts / not-working item — excluded";
+      if (detail.startsWith("not_new"))
+        return "Not a new part (this job status requires new)";
+      if (detail.startsWith("used"))
+        return "Used item (this job status requires new)";
+      return "Condition not eligible";
+    case "stock":
+      return `Not in stock (${detail.replace(/_/g, " ") || "unavailable"})`;
+    case "seller_feedback":
+      return `Seller rating ${detail} is below the 98% minimum`;
+    case "seller_count":
+      return `Seller has only ${detail} ratings (below the 100 minimum)`;
+    case "delivery": {
+      const m = detail.match(/(\d+)d>(\d+)d/);
+      return m
+        ? `Delivery ${m[1]} days exceeds the ${m[2]}-day cutoff`
+        : "Delivery too slow for this job status";
+    }
+    case "country":
+      return `Ships from ${detail} (US-only required)`;
+    case "fitment_risk":
+      return `High fitment-complaint rate (${detail})`;
+    default:
+      return reason; // 未知 code: 原样显示, 便于排查
+  }
 }
 
 // ============================================================
@@ -206,7 +256,7 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
 
               {ef.top_rated && (
                 <span
-                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-50 text-yellow-700"
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500"
                   title="eBay Top Rated Seller"
                 >
                   <Star size={10} />
@@ -323,91 +373,239 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
 // 自包含 (从 candidate 自己算 ef / sellerPct / sellerCount)。
 // ============================================================
 
+// 展开卡片的信息区块: 统一大写灰标签 + 细分隔线 (第一块不画线)。
+function DetailBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t border-gray-200 pt-2.5 first:border-t-0 first:pt-0">
+      <div className="font-medium text-gray-400 uppercase tracking-wide text-[10px] mb-1.5">
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function CandidateDetail({ candidate }: { candidate: Candidate }) {
   const ef = candidate.enrichedFields || {};
   const sellerPct = parseSellerPct(ef.seller_feedback_pct);
   const sellerCount = ef.seller_feedback_count ?? null;
 
+  const compatEntries = candidate.compatibility
+    ? Object.entries(candidate.compatibility).filter(([k]) => k !== "categoryPath")
+    : [];
+  const partNumbers = candidate.partNumbers ?? [];
+
+  // 画廊: 主图 + 附加图 全塞进一个数组 (去重, 去空)。缩略图条即画廊。
+  const images = Array.from(
+    new Set(
+      [candidate.imageUrl, ...(candidate.additionalImageUrls ?? [])].filter(
+        (u): u is string => !!u
+      )
+    )
+  );
+  const [activeIdx, setActiveIdx] = useState(0);
+  const heroSrc = images[activeIdx] ?? images[0] ?? null;
+
+  const returnsText =
+    ef.returns_accepted != null
+      ? ef.returns_accepted
+        ? `Returns accepted (${ef.return_period_days ?? "?"}d)`
+        : "Returns not accepted"
+      : null;
+  const soldText =
+    ef.sold_qty != null && ef.sold_qty > 0
+      ? `${ef.sold_qty.toLocaleString()} sold`
+      : null;
+
+  // 库存状态: OUT_OF_STOCK → Backorder; ≤3 件 → "Only N left" (琥珀提示);
+  // 充足 / 状态缺失 → 一律 "In stock"。
+  const stockQty = ef.available_qty;
+  const isBackorder =
+    (ef.availability_status ?? "").toUpperCase() === "OUT_OF_STOCK";
+  const isLowStock =
+    !isBackorder && stockQty != null && stockQty > 0 && stockQty <= 3;
+
   return (
-    <div className="text-xs text-gray-600 space-y-2">
-      {candidate.compatibility && Object.keys(candidate.compatibility).length > 0 && (
-        <div>
-          <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-            Compatibility
+    <div className="flex flex-col lg:flex-row gap-5 text-xs text-gray-600">
+      {/* LEFT: 可切换画廊 —— hero(240) + 缩略图条。点缩略图只换 hero, 不跳转 */}
+      {heroSrc && (
+        <div className="shrink-0 w-[240px]">
+          {/* hero: 把所有图叠着渲染 (提前 preload), 用 opacity 切换 → 即时无闪 */}
+          <div className="relative w-[240px] h-[240px]">
+            {images.map((url, i) => (
+              <Image
+                key={url}
+                src={url}
+                alt={`${candidate.title}${i === 0 ? "" : ` ${i + 1}`}`}
+                fill
+                sizes="240px"
+                priority={i === 0}
+                className={`object-cover rounded-lg border border-gray-200 transition-opacity duration-150 ${
+                  i === activeIdx ? "opacity-100" : "opacity-0 pointer-events-none"
+                }`}
+              />
+            ))}
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-            {Object.entries(candidate.compatibility)
-              .filter(([k]) => k !== "categoryPath")
-              .map(([k, v]) => (
+
+          {/* 缩略图条 = 画廊导航 (含主图), 选中态 teal 高亮 */}
+          {images.length > 1 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {images.map((url, i) => (
+                <button
+                  type="button"
+                  key={url}
+                  onClick={() => setActiveIdx(i)}
+                  aria-label={`Show photo ${i + 1}`}
+                  aria-pressed={i === activeIdx}
+                  className={`block rounded overflow-hidden border transition ${
+                    i === activeIdx
+                      ? "border-[#00B4A6] ring-1 ring-[#00B4A6]"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <Image
+                    src={url}
+                    alt=""
+                    width={44}
+                    height={44}
+                    className="w-[44px] h-[44px] object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* RIGHT: 信息分区块 */}
+      <div className="flex-1 min-w-0 space-y-2.5">
+        {/* 第一部分: 商品标题 (同折叠行) + View on eBay */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="text-[13px] font-medium text-[#1A1A2E] leading-snug">
+            {candidate.title}
+          </div>
+          <a
+            href={candidate.itemUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-gray-400 hover:text-[#00B4A6] transition whitespace-nowrap"
+          >
+            View on eBay <ExternalLink size={10} />
+          </a>
+        </div>
+
+        {compatEntries.length > 0 && (
+          <DetailBlock label="Compatibility">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {compatEntries.map(([k, v]) => (
                 <div key={k}>
                   <span className="text-gray-400">{k}:</span> {String(v)}
                 </div>
               ))}
-          </div>
-        </div>
-      )}
+            </div>
+          </DetailBlock>
+        )}
 
-      {ef.seller_username && (
-        <div>
-          <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-            Seller
-          </div>
-          <div>
-            {ef.seller_username}
-            {sellerPct != null && ` · ${sellerPct.toFixed(1)}% positive`}
-            {sellerCount != null && ` (${sellerCount.toLocaleString()} feedback)`}
-          </div>
-        </div>
-      )}
+        {partNumbers.length > 0 && (
+          <DetailBlock label="Part numbers">
+            <div className="flex flex-wrap gap-1">
+              {partNumbers.slice(0, 12).map((pn) => (
+                <span
+                  key={pn}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-mono"
+                >
+                  {pn}
+                </span>
+              ))}
+              {partNumbers.length > 12 && (
+                <span className="inline-flex items-center px-1 py-0.5 text-[11px] text-gray-400">
+                  +{partNumbers.length - 12} more
+                </span>
+              )}
+            </div>
+          </DetailBlock>
+        )}
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {ef.returns_accepted != null && (
-          <div className="inline-flex items-center gap-1">
-            <RotateCcw size={11} />
-            Returns:{" "}
-            {ef.returns_accepted
-              ? `accepted (${ef.return_period_days ?? "?"}d)`
-              : "not accepted"}
+        <DetailBlock label="Seller">
+          <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-medium">
+              eBay store
+            </span>
+            {ef.seller_username ? (
+              <span className="text-gray-700">{ef.seller_username}</span>
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
+            {sellerPct != null && (
+              <span className="text-gray-500">· {sellerPct.toFixed(1)}% positive</span>
+            )}
+            {sellerCount != null && (
+              <span className="text-gray-400">
+                ({sellerCount.toLocaleString()} feedback)
+              </span>
+            )}
+            {ef.top_rated && (
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
+                <Star size={9} />
+                Top Rated
+              </span>
+            )}
           </div>
-        )}
-        {ef.sold_qty != null && ef.sold_qty > 0 && (
-          <div className="inline-flex items-center gap-1">
-            <Package size={11} />
-            {ef.sold_qty.toLocaleString()} sold
+        </DetailBlock>
+
+        <DetailBlock label="Purchase">
+          {/* 库存 + Returns + sold 并成一行 (含 shipping) */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {/* 库存: Backorder / In stock · N available (N≤3 数字染琥珀) /
+                available_qty 缺失时只显 In stock */}
+            {isBackorder ? (
+              <span className="inline-flex items-center gap-1 text-gray-500">
+                <Boxes size={11} />
+                Backorder
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Boxes size={11} />
+                <span>
+                  In stock
+                  {stockQty != null && stockQty > 0 && (
+                    <>
+                      {" · "}
+                      <span
+                        className={isLowStock ? "text-amber-700 font-semibold" : ""}
+                      >
+                        {stockQty}
+                      </span>
+                      {" available"}
+                    </>
+                  )}
+                </span>
+              </span>
+            )}
+            {returnsText && (
+              <span className="inline-flex items-center gap-1">
+                <RotateCcw size={11} />
+                {returnsText}
+              </span>
+            )}
+            {soldText && (
+              <span className="inline-flex items-center gap-1">
+                <Package size={11} />
+                {soldText}
+              </span>
+            )}
+            {ef.shipping_cost != null && Number(ef.shipping_cost) > 0 && (
+              <span>Shipping: ${Number(ef.shipping_cost).toFixed(2)}</span>
+            )}
           </div>
-        )}
-        {ef.available_qty != null && <div>Stock: {ef.available_qty}</div>}
-        {ef.shipping_cost != null && Number(ef.shipping_cost) > 0 && (
-          <div>Shipping: ${Number(ef.shipping_cost).toFixed(2)}</div>
-        )}
+        </DetailBlock>
       </div>
-
-      {candidate.additionalImageUrls.length > 0 && (
-        <div>
-          <div className="font-medium text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-            More photos
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {candidate.additionalImageUrls.map((url, i) => (
-              <a
-                key={i}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
-              >
-                <Image
-                  src={url}
-                  alt={`${candidate.title} ${i + 2}`}
-                  width={80}
-                  height={80}
-                  className="w-[80px] h-[80px] object-cover rounded border border-gray-100"
-                />
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

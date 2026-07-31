@@ -11,7 +11,6 @@
  */
 
 import { Fragment, useState } from "react";
-import Image from "next/image";
 import { Award, Star, ChevronRight, ChevronDown, Check } from "lucide-react";
 import {
   type Candidate,
@@ -19,28 +18,79 @@ import {
   formatDeliveryRange,
   formatWarranty,
   parseSellerPct,
+  humanizeGateReason,
 } from "@/components/CandidateCard";
 import { useSourcing } from "./SourcingContext";
+import {
+  PRESET_META,
+  PRESET_COLORS,
+  NEUTRAL_BADGE,
+  PRESET_ORDER,
+  ALL_PRESET_COUNT,
+} from "./presetMeta";
 
-// preset → pick tag 文案 + 配色。key = V2 四名, 文案与 Job Status 按钮一致
-// (Rush / Balanced / Budget / Premium)。teal=速度, amber=价格, violet=质量。
-const PICK_TAG: Record<string, { label: string; className: string }> = {
-  Rush: { label: "Rush pick", className: "bg-teal-50 text-teal-700" },
-  Balanced: { label: "Balanced pick", className: "bg-slate-100 text-slate-600" },
-  Budget: { label: "Budget pick", className: "bg-amber-50 text-amber-700" },
-  Premium: { label: "Premium pick", className: "bg-violet-50 text-violet-700" },
-};
-
-function PickTag({ preset }: { preset: string }) {
-  const meta = PICK_TAG[preset] ?? {
-    label: `${preset} pick`,
-    className: "bg-gray-100 text-gray-600",
-  };
+// 单个 preset 的 Top1 徽章: preset 主题色, 浅底 + 主色文字 (PRESET_COLORS)。
+// 视觉权重压过中性灰的 Top Rated 标。
+function PickPill({ preset }: { preset: string }) {
+  const meta = PRESET_META[preset];
+  const color = PRESET_COLORS[preset];
+  if (!meta || !color) return null;
+  const { Icon } = meta;
   return (
     <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${meta.className}`}
+      title={`Top pick for ${meta.label}`}
+      style={{ backgroundColor: color.bg, color: color.text }}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
     >
+      <Icon size={11} />
       {meta.label}
+    </span>
+  );
+}
+
+/**
+ * 行内 PICK 徽章行。
+ * - 当前排序 preset 自己的 Top1 不重复显示 (表头已经写了 Ranked by X)。
+ * - 四个 preset 全赢 → 合并成单个 "★ Best overall"。
+ * - 其余 → 每个其他 preset 一个小图标 (hover 出名字)。
+ */
+function PickBadges({
+  presets,
+  currentPreset,
+}: {
+  presets: string[];
+  currentPreset: string;
+}) {
+  // 无差别碾压: 四个 preset 全是 Top1 → 单个玫红 ★ Best overall (浅底 + 主色文字)
+  if (presets.length >= ALL_PRESET_COUNT) {
+    const bo = PRESET_COLORS.BestOverall;
+    return (
+      <span
+        title="Top pick across every job status"
+        style={{ backgroundColor: bo.bg, color: bo.text }}
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
+      >
+        <Star size={11} style={{ fill: bo.text, color: bo.text }} />
+        Best overall
+      </span>
+    );
+  }
+
+  // 只显示「其他」preset 的 Top1, 去掉当前排序视角, 按 canonical 顺序
+  const others = presets
+    .filter((p) => p !== currentPreset)
+    .sort((a, b) => PRESET_ORDER.indexOf(a) - PRESET_ORDER.indexOf(b));
+
+  if (others.length === 0) return null;
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-0.5">
+        Also top for
+      </span>
+      {others.map((p) => (
+        <PickPill key={p} preset={p} />
+      ))}
     </span>
   );
 }
@@ -108,7 +158,13 @@ function SelectButton({
   );
 }
 
-export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
+export function CandidateTable({
+  candidates,
+  currentPreset,
+}: {
+  candidates: Candidate[];
+  currentPreset: string;
+}) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {
@@ -131,8 +187,20 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
   });
 
   return (
-    <div className="overflow-x-auto border border-gray-200 rounded-lg">
-      <table className="w-full text-sm border-collapse">
+    <div className="border border-gray-200 rounded-lg">
+      <table className="w-full text-sm border-collapse table-fixed">
+        {/* 固定列宽: 总和 100%, 长文本列 (标题/warranty) 靠截断/换行, 不撑宽表格 */}
+        <colgroup>
+          <col className="w-[24%]" /> {/* Part / Brand */}
+          <col className="w-[9%]" /> {/* Condition */}
+          <col className="w-[12%]" /> {/* Seller */}
+          <col className="w-[12%]" /> {/* Delivery */}
+          <col className="w-[13%]" /> {/* Warranty */}
+          <col className="w-[7%]" /> {/* Price */}
+          <col className="w-[8%]" /> {/* Score */}
+          <col className="w-[11%]" /> {/* Select */}
+          <col className="w-[36px]" /> {/* 展开箭头 */}
+        </colgroup>
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-200">
             <th className="px-3 py-2 font-medium">Part / Brand</th>
@@ -143,13 +211,18 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
             <th className="px-3 py-2 font-medium text-right">Price</th>
             <th className="px-3 py-2 font-medium text-right">Score</th>
             <th className="px-3 py-2" />
-            <th className="px-3 py-2 w-8" />
+            <th className="px-3 py-2" />
           </tr>
         </thead>
         <tbody>
           {sorted.map((c) => {
             const isOpen = expanded.has(c.id);
             const isTopPick = c.optimizerRank === 1;
+            // 徽章行是否有内容: 全赢, 或去掉当前 preset 后仍有其他 preset
+            const picks = c.pickInPresets ?? [];
+            const showPickRow =
+              picks.length >= ALL_PRESET_COUNT ||
+              picks.some((p) => p !== currentPreset);
             const isGated = c.optimizerGateReason != null;
             const ef = c.enrichedFields || {};
             const sellerPct = parseSellerPct(ef.seller_feedback_pct);
@@ -162,14 +235,15 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
 
             return (
               <Fragment key={c.id}>
-                {/* pick tag 行: 该候选在某些 preset 下是 Rank 1 时, 上方显示一行标签 */}
-                {c.pickInPresets && c.pickInPresets.length > 0 && (
+                {/* pick 徽章行: 该候选在「其他」preset 下是 Rank 1 时显示 */}
+                {showPickRow && (
                   <tr className={isTopPick ? "bg-teal-50/50" : ""}>
                     <td colSpan={8} className="px-3 pt-2 pb-0">
-                      <div className="flex flex-wrap gap-1.5">
-                        {c.pickInPresets.map((p) => (
-                          <PickTag key={p} preset={p} />
-                        ))}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <PickBadges
+                          presets={picks}
+                          currentPreset={currentPreset}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -180,11 +254,23 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
                   }`}
                 >
                   {/* PART / BRAND */}
-                  <td className="px-3 py-2 max-w-[300px]">
+                  <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5">
-                      {isTopPick && (
-                        <Award size={12} className="text-[#00B4A6] shrink-0" />
-                      )}
+                      {isTopPick &&
+                        (() => {
+                          // #1 标记: 当前排序 preset 的图标形状, 但色走品牌青
+                          // (与 Ranked-by chip / 按钮一致), 不上 preset 色。
+                          const cm = PRESET_META[currentPreset];
+                          const CurIcon = cm?.Icon ?? Award;
+                          return (
+                            <span
+                              title={`Top pick for ${cm?.label ?? currentPreset} (current sort)`}
+                              className="shrink-0 text-[#00B4A6]"
+                            >
+                              <CurIcon size={12} />
+                            </span>
+                          );
+                        })()}
                       <span className="text-xs font-medium text-gray-600 truncate">
                         {c.brand ?? "—"}
                       </span>
@@ -212,7 +298,10 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
                           </div>
                         )}
                         {ef.top_rated && (
-                          <span className="mt-0.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium bg-yellow-50 text-yellow-700">
+                          <span
+                            style={{ color: NEUTRAL_BADGE }}
+                            className="mt-0.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium bg-slate-100"
+                          >
                             <Star size={9} />
                             Top Rated
                           </span>
@@ -228,8 +317,8 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
                     {delivery ?? "—"}
                   </td>
 
-                  {/* WARRANTY */}
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                  {/* WARRANTY (可换行, 不撑宽表格) */}
+                  <td className="px-3 py-2 text-gray-600 break-words">
                     {warranty ?? "—"}
                   </td>
 
@@ -242,15 +331,18 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     {c.optimizerTotal != null ? (
                       <span
-                        className="text-gray-700 tabular-nums cursor-help"
+                        className="text-gray-700 tabular-nums decoration-dotted decoration-gray-300 underline-offset-4 underline"
                         title={`price: ${c.optimizerPriceScore?.toFixed(0) ?? "—"} | speed: ${c.optimizerSpeedScore?.toFixed(0) ?? "—"} | quality: ${c.optimizerQualityScore?.toFixed(0) ?? "—"}`}
                       >
                         {c.optimizerTotal.toFixed(0)}
                       </span>
                     ) : isGated ? (
                       <span
-                        title={c.optimizerGateReason ?? undefined}
-                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700"
+                        title={
+                          humanizeGateReason(c.optimizerGateReason) ??
+                          "Filtered out by a hard gate"
+                        }
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 cursor-help"
                       >
                         Filtered
                       </span>
@@ -283,38 +375,8 @@ export function CandidateTable({ candidates }: { candidates: Candidate[] }) {
 
                 {isOpen && (
                   <tr className={isTopPick ? "bg-teal-50/30" : "bg-gray-50/60"}>
-                    <td colSpan={9} className="px-3 py-3 border-b border-gray-100">
-                      <div className="flex gap-3">
-                        {c.imageUrl && (
-                          <a
-                            href={c.itemUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0"
-                          >
-                            <Image
-                              src={c.imageUrl}
-                              alt={c.title}
-                              width={60}
-                              height={60}
-                              className="w-[60px] h-[60px] object-cover rounded border border-gray-100"
-                            />
-                          </a>
-                        )}
-                        <div className="flex-1 min-w-0 max-h-[320px] overflow-y-auto">
-                          <a
-                            href={c.itemUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] text-gray-400 hover:text-[#00B4A6] transition"
-                          >
-                            View on eBay ↗
-                          </a>
-                          <div className="mt-2">
-                            <CandidateDetail candidate={c} />
-                          </div>
-                        </div>
-                      </div>
+                    <td colSpan={9} className="px-3 py-4 border-b border-gray-100">
+                      <CandidateDetail candidate={c} />
                     </td>
                   </tr>
                 )}
