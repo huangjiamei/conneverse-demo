@@ -191,12 +191,12 @@ export function CandidateTable({
       <table className="w-full text-sm border-collapse table-fixed">
         {/* 固定列宽: 总和 100%, 长文本列 (标题/warranty) 靠截断/换行, 不撑宽表格 */}
         <colgroup>
-          <col className="w-[24%]" /> {/* Part / Brand */}
+          <col className="w-[22%]" /> {/* Part / Brand */}
           <col className="w-[9%]" /> {/* Condition */}
           <col className="w-[12%]" /> {/* Seller */}
-          <col className="w-[12%]" /> {/* Delivery */}
-          <col className="w-[13%]" /> {/* Warranty */}
-          <col className="w-[7%]" /> {/* Price */}
+          <col className="w-[11%]" /> {/* Delivery */}
+          <col className="w-[11%]" /> {/* Warranty */}
+          <col className="w-[12%]" /> {/* Price (+ 运费副行, 需要更宽) */}
           <col className="w-[8%]" /> {/* Score */}
           <col className="w-[11%]" /> {/* Select */}
           <col className="w-[36px]" /> {/* 展开箭头 */}
@@ -232,6 +232,16 @@ export function CandidateTable({
               ef.delivery_max_date
             );
             const warranty = formatWarranty(ef.warranty_raw);
+            // 运费: 用于 PRICE 列副行, 让展示价与排序用的 landed (price+shipping) 一致。
+            // null = 缺失, 0 = 免运费, >0 = 有运费。
+            const shipRaw = ef.shipping_cost;
+            const shipParsed =
+              shipRaw == null || String(shipRaw).trim() === ""
+                ? null
+                : Number(shipRaw);
+            const shipping =
+              shipParsed != null && !Number.isNaN(shipParsed) ? shipParsed : null;
+            const priceNum = Number(c.price);
 
             return (
               <Fragment key={c.id}>
@@ -322,9 +332,26 @@ export function CandidateTable({
                     {warranty ?? "—"}
                   </td>
 
-                  {/* PRICE */}
-                  <td className="px-3 py-2 text-right font-semibold text-[#1A1A2E] whitespace-nowrap">
-                    ${c.price}
+                  {/* PRICE (主价 + 运费副行, 与 landed 排序口径一致)。
+                      副行限制在本单元格内换行, 不溢出到 Score / Select。 */}
+                  <td className="px-3 py-2 text-right align-top">
+                    <div className="font-semibold text-[#1A1A2E] whitespace-nowrap">
+                      ${c.price}
+                    </div>
+                    {shipping == null ? (
+                      <div className="text-[10px] leading-tight text-amber-600 break-words">
+                        + shipping at checkout
+                      </div>
+                    ) : shipping === 0 ? (
+                      <div className="text-[10px] leading-tight text-green-600">
+                        Free shipping
+                      </div>
+                    ) : (
+                      <div className="text-[10px] leading-tight text-gray-400 break-words">
+                        ${(priceNum + shipping).toFixed(2)} total · incl. $
+                        {shipping.toFixed(2)} ship
+                      </div>
+                    )}
                   </td>
 
                   {/* SCORE (总分 + speed 小字) / Filtered */}
