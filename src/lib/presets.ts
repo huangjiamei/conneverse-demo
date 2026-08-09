@@ -20,5 +20,19 @@ export const VALID_PRESETS = [
 
 export const VALID_PRESET_SET: ReadonlySet<string> = new Set(VALID_PRESETS);
 
+/**
+ * UI 里给用户看的 preset (Job Status 胶囊)。顺序即展示顺序, Budget 在前 (它是默认)。
+ *
+ * 刻意与 VALID_PRESETS 分开: 后端仍然接受全部 8 个名字, prewarm 也照旧算 4 个
+ * preset —— 隐藏纯粹是展示层的事。这样历史记录里存的 Balanced/Premium、以及
+ * 已经预热好的缓存都还能正常解析, 不用改数据。
+ */
+export const SHOWN_PRESETS = ["Budget", "Rush"] as const;
+
+export const SHOWN_PRESET_SET: ReadonlySet<string> = new Set(SHOWN_PRESETS);
+
+/** 展示层的"全赢"阈值: 在所有可见 preset 下都是 Top1 → Best overall */
+export const SHOWN_PRESET_COUNT = SHOWN_PRESETS.length;
+
 // 未传/非法 preset 的兜底
-export const DEFAULT_PRESET = "Balanced";
+export const DEFAULT_PRESET = "Budget";

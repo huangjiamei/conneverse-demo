@@ -14,13 +14,15 @@
 
 import { useEffect, useState } from "react";
 import {
-  Loader2, Search, Gauge, Scale, DollarSign, Award, Car,
+  Loader2, Search, Car,
   ChevronDown, ChevronUp, X, Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type Candidate } from "@/components/CandidateCard";
 import { CandidateTable } from "./CandidateTable";
 import { PRESET_META, PRESET_COLORS } from "./presetMeta";
+import { SHOWN_PRESETS, DEFAULT_PRESET } from "@/lib/presets";
 import { useSourcing } from "./SourcingContext";
 import { applyPositions } from "@/constants/positionWords";
 
@@ -34,13 +36,13 @@ const POPULAR = [
   { year: 2021, makeName: "Chevrolet", modelName: "Silverado 1500" },
 ] as const;
 
-// Job Status preset 胶囊 —— key 与 matcher V2 的 preset 对齐
-const PRESET_OPTIONS = [
-  { key: "Rush", label: "Rush", Icon: Gauge },
-  { key: "Balanced", label: "Balanced", Icon: Scale },
-  { key: "Budget", label: "Budget", Icon: DollarSign },
-  { key: "Premium", label: "Premium", Icon: Award },
-] as const;
+// Job Status preset 胶囊 —— 只展示 SHOWN_PRESETS (Budget 在前), 标签/图标复用 PRESET_META。
+// 后端仍接受全部 preset, 隐藏的只是不给用户选。
+const PRESET_OPTIONS = SHOWN_PRESETS.map((key) => ({
+  key,
+  label: PRESET_META[key].label,
+  Icon: PRESET_META[key].Icon,
+}));
 
 type YearOpt = { id: number };
 type NamedOpt = { id: number; name: string };
@@ -86,6 +88,7 @@ type SearchResponse = {
 };
 
 export default function VehicleSearchClient() {
+  const router = useRouter();
   const { resetSelections, setQuoteContext } = useSourcing();
 
   // 各层选项列表
@@ -106,8 +109,8 @@ export default function VehicleSearchClient() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingSubmodels, setLoadingSubmodels] = useState(false);
 
-  // Job Status preset (默认 Balanced)
-  const [preset, setPreset] = useState<string>("Balanced");
+  // Job Status preset (默认 Budget)
+  const [preset, setPreset] = useState<string>(DEFAULT_PRESET);
   const [switchingPreset, setSwitchingPreset] = useState<string | null>(null);
 
   // 零件信息 + 搜索
@@ -476,8 +479,14 @@ export default function VehicleSearchClient() {
         throw new Error(errBody.error || `Search failed: HTTP ${res.status}`);
       }
       const data: SearchResponse = await res.json();
-      setResult(data);
       setMatchSearchId(data.matchSearchId ?? null);
+      // 默认落到 customer view (用户侧合并结果)。admin 表格仍可从那里 "Admin view →" 进入。
+      // 有 id 就不在本页渲染 admin 表 (避免跳转前闪一下), 直接跳。
+      if (data.matchSearchId) {
+        router.push(`/results/${data.matchSearchId}`);
+        return;
+      }
+      setResult(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
@@ -1054,7 +1063,7 @@ export default function VehicleSearchClient() {
       {/* 结果区 */}
       {result && !searching && (
         <div className="mt-6">
-          <div className="flex items-baseline justify-between mb-3">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide flex items-center gap-2">
               Verified candidates ({verified.length})
               {result.optimizerMeta &&
@@ -1081,6 +1090,14 @@ export default function VehicleSearchClient() {
                   );
                 })()}
             </h2>
+            {matchSearchId && verified.length > 0 && (
+              <Link
+                href={`/results/${matchSearchId}`}
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1A2E] text-white text-xs font-medium hover:bg-[#2a2a44] transition"
+              >
+                Customer view →
+              </Link>
+            )}
           </div>
 
           {verified.length === 0 ? (

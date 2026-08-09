@@ -9,16 +9,16 @@
  *   - quantities: 每条候选的数量 (默认 1)
  *   - laborHours / laborRate / taxRate: 报价参数
  *
- * 自动填备选: 选主推时, 若该候选在全部 4 个 preset 下都是 Rank 1
- * (pickInPresets 覆盖所有 preset), 说明它无差别碾压, 就自动把 Rank 2 / Rank 3
- * 填成备选, 方便对比。否则不自动填。
+ * 自动填备选: 选主推时, 若该候选在所有「可见」preset (Budget + Rush) 下都是 Rank 1,
+ * 说明它无差别碾压, 就自动把 Rank 2 / Rank 3 填成备选, 方便对比。否则不自动填。
+ * 判定口径与表格里的 ★ Best overall 徽章一致 —— 隐藏的 preset 不参与比较。
  */
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { type Candidate } from "@/components/CandidateCard";
+import { SHOWN_PRESET_SET, SHOWN_PRESET_COUNT } from "@/lib/presets";
 
 const ALT_MAX = 2;
-const ALL_PRESET_COUNT = 4;
 
 type SourcingContextValue = {
   primary: Candidate | null;
@@ -83,8 +83,9 @@ export function SourcingProvider({ children }: { children: ReactNode }) {
     setPrimary(c);
     ensureQty(c.id);
 
-    // 自动填备选: 仅当该候选在全部 4 个 preset 下都是 Rank 1
-    if ((c.pickInPresets?.length ?? 0) >= ALL_PRESET_COUNT) {
+    // 自动填备选: 仅当该候选在所有可见 preset 下都是 Rank 1
+    const shownWins = (c.pickInPresets ?? []).filter((p) => SHOWN_PRESET_SET.has(p));
+    if (shownWins.length >= SHOWN_PRESET_COUNT) {
       const byRank = (r: number) =>
         siblings.find((s) => s.optimizerRank === r && s.id !== c.id);
       const autos = [byRank(2), byRank(3)].filter(Boolean) as Candidate[];

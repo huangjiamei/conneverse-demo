@@ -120,7 +120,7 @@ export type PublicOffer = {
   /** Card label for a pick — data-driven since v3 (the primary pick is
    * "Ready Now" only when it's actually fast; a slow-cheap primary
    * under scheduled_week reads "Best Price"). */
-  pickLabel: "Ready Now" | "Best Price" | null;
+  pickLabel: "Ready Now" | "Cheapest" | null;
   partName: string;
   partNumber: string;
   brand: string | null;

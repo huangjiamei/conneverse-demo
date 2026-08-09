@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Search, Pencil, X, ChevronDown, ChevronUp } from "lucide-react";
 import { CandidateCard, type Candidate } from "@/components/CandidateCard";
+import { SHOWN_PRESETS } from "@/lib/presets";
 
 // ============================================================
 // Types
@@ -42,29 +43,21 @@ type Props = {
 // Preset metadata (显示用)
 // ============================================================
 
-// V2 preset (key 与 matcher / DB 对齐)
-const PRESETS = [
-  {
-    key: "Rush",
-    label: "Rush",
-    description: "Need it today, strict on seller & US only",
-  },
-  {
-    key: "Balanced",
-    label: "Balanced",
-    description: "Balance price / speed / quality (default)",
-  },
-  {
-    key: "Budget",
-    label: "Budget",
-    description: "Cheapest wins, seller looser",
-  },
-  {
-    key: "Premium",
-    label: "Premium",
-    description: "Highest-rated sellers, big brands",
-  },
-] as const;
+// 每个 preset 的说明文案 (hover 提示)。这里列全 4 个是为了让历史 PartLine 上
+// 存着的 Balanced/Premium 也有文案可查; 实际展示哪几个由 SHOWN_PRESETS 决定。
+const PRESET_DESCRIPTIONS: Record<string, string> = {
+  Rush: "Speed first — fastest delivery ranks highest",
+  Balanced: "Balance price / speed / quality",
+  Budget: "Cheapest landed cost wins (default)",
+  Premium: "Quality first — condition, seller, warranty",
+};
+
+// V2 preset (key 与 matcher / DB 对齐)。只展示 SHOWN_PRESETS, Budget 在前。
+const PRESETS = SHOWN_PRESETS.map((key) => ({
+  key,
+  label: key,
+  description: PRESET_DESCRIPTIONS[key] ?? "",
+}));
 
 // ============================================================
 // Main component

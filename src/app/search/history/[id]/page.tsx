@@ -124,13 +124,21 @@ export default async function HistoryDetailPage({
           <ChevronLeft size={15} />
           Back to history
         </Link>
-        <Link
-          href="/search"
-          className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] transition"
-        >
-          <Plus size={14} />
-          New search
-        </Link>
+        <div className="shrink-0 flex items-center gap-3">
+          <Link
+            href={`/results/${id}`}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1A1A2E] text-white text-sm font-medium hover:bg-[#2a2a44] transition"
+          >
+            Customer view →
+          </Link>
+          <Link
+            href="/search"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] transition"
+          >
+            <Plus size={14} />
+            New search
+          </Link>
+        </div>
       </div>
 
       {/* 搜索快照头 */}

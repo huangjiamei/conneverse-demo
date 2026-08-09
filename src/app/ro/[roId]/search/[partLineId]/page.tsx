@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import SearchClient from "./SearchClient";
+import { DEFAULT_PRESET } from "@/lib/presets";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,7 @@ export default async function SearchPage({
         initialPartDescriptionRaw={partLine.partDescriptionRaw}
         initialPartNumber={partLine.partNumber}
         initialPartNumberRaw={partLine.partNumberRaw}
-        initialSelectedPreset={partLine.selectedPreset || "sameDayJob"}
+        initialSelectedPreset={partLine.selectedPreset || DEFAULT_PRESET}
         partType={partLine.partTypeRaw}
         cccLineNumber={partLine.cccLineNumber}
         historicalPurchase={

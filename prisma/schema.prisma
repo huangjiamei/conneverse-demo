@@ -69,7 +69,7 @@ model PartLine {
   quantity        Int     @default(1)
 
   //用户偏好
-  selectedPreset String @default("Balanced")
+  selectedPreset String @default("Budget")
 
   // 关系
   historicalPurchase HistoricalPurchase? // CCC 里"这家店过去实际怎么买的"

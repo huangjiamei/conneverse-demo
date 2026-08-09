@@ -174,9 +174,9 @@ export default function HistoryListClient({
                 className="w-4 h-4 shrink-0 accent-[#00B4A6] cursor-pointer"
               />
 
-              {/* 主内容 (链到详情) */}
+              {/* 主内容 (默认进 customer view; admin 表可从那里 "Admin view →" 进) */}
               <Link
-                href={`/search/history/${r.id}`}
+                href={`/results/${r.id}`}
                 className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-2 md:gap-4 py-3 group"
               >
                 <div className="flex-1 min-w-0">

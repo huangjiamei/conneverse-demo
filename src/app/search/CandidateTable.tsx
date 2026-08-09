@@ -25,9 +25,19 @@ import {
   PRESET_META,
   PRESET_COLORS,
   NEUTRAL_BADGE,
-  PRESET_ORDER,
-  ALL_PRESET_COUNT,
 } from "./presetMeta";
+import { SHOWN_PRESETS, SHOWN_PRESET_SET, SHOWN_PRESET_COUNT } from "@/lib/presets";
+
+/**
+ * pick 徽章只跨「可见的」preset 比较。
+ * prewarm 仍然算 4 个 preset (见 prewarm-presets.ts), 但用户只看得到 Budget / Rush,
+ * 给他们看隐藏 preset 的徽章没有意义。
+ */
+function shownPicks(picks: string[] | undefined): string[] {
+  return (picks ?? [])
+    .filter((p) => SHOWN_PRESET_SET.has(p))
+    .sort((a, b) => SHOWN_PRESETS.indexOf(a as never) - SHOWN_PRESETS.indexOf(b as never));
+}
 
 // 单个 preset 的 Top1 徽章: preset 主题色, 浅底 + 主色文字 (PRESET_COLORS)。
 // 视觉权重压过中性灰的 Top Rated 标。
@@ -51,8 +61,10 @@ function PickPill({ preset }: { preset: string }) {
 /**
  * 行内 PICK 徽章行。
  * - 当前排序 preset 自己的 Top1 不重复显示 (表头已经写了 Ranked by X)。
- * - 四个 preset 全赢 → 合并成单个 "★ Best overall"。
- * - 其余 → 每个其他 preset 一个小图标 (hover 出名字)。
+ * - 所有可见 preset (Budget + Rush) 全赢 → 合并成单个 "★ Best overall"。
+ * - 其余 → 每个其他可见 preset 一个小图标 (hover 出名字)。
+ *
+ * presets 传进来前已经用 shownPicks() 过滤过, 这里只按可见数量判断。
  */
 function PickBadges({
   presets,
@@ -61,8 +73,8 @@ function PickBadges({
   presets: string[];
   currentPreset: string;
 }) {
-  // 无差别碾压: 四个 preset 全是 Top1 → 单个玫红 ★ Best overall (浅底 + 主色文字)
-  if (presets.length >= ALL_PRESET_COUNT) {
+  // 无差别碾压: 所有可见 preset 都是 Top1 → 单个玫红 ★ Best overall (浅底 + 主色文字)
+  if (presets.length >= SHOWN_PRESET_COUNT) {
     const bo = PRESET_COLORS.BestOverall;
     return (
       <span
@@ -76,10 +88,8 @@ function PickBadges({
     );
   }
 
-  // 只显示「其他」preset 的 Top1, 去掉当前排序视角, 按 canonical 顺序
-  const others = presets
-    .filter((p) => p !== currentPreset)
-    .sort((a, b) => PRESET_ORDER.indexOf(a) - PRESET_ORDER.indexOf(b));
+  // 只显示「其他」preset 的 Top1, 去掉当前排序视角 (顺序在 shownPicks 里已排好)
+  const others = presets.filter((p) => p !== currentPreset);
 
   if (others.length === 0) return null;
 
@@ -218,10 +228,10 @@ export function CandidateTable({
           {sorted.map((c) => {
             const isOpen = expanded.has(c.id);
             const isTopPick = c.optimizerRank === 1;
-            // 徽章行是否有内容: 全赢, 或去掉当前 preset 后仍有其他 preset
-            const picks = c.pickInPresets ?? [];
+            // 徽章行是否有内容: 可见 preset 全赢, 或去掉当前 preset 后仍有其他可见 preset
+            const picks = shownPicks(c.pickInPresets);
             const showPickRow =
-              picks.length >= ALL_PRESET_COUNT ||
+              picks.length >= SHOWN_PRESET_COUNT ||
               picks.some((p) => p !== currentPreset);
             const isGated = c.optimizerGateReason != null;
             const ef = c.enrichedFields || {};
