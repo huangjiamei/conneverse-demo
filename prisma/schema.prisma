@@ -11,6 +11,31 @@ datasource db {
   extensions = [pg_trgm]
 }
 
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+// CLAIM = 该店暂无管理员,注册者认领;REPLACE = 更换现任管理员
+enum ShopAdminRequestKind {
+  CLAIM
+  REPLACE
+}
+
+enum ShopAdminRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ShopType {
+  MECHANICAL
+  COLLISION    
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  SHOP · REPAIR ORDER · PART LINE
 //  CCC 数据的落地形态。RepairOrder 一份对应一辆车 + 一组 PartLine。
@@ -21,8 +46,90 @@ model Shop {
   id        String   @id @default(cuid())
   name      String   @unique // "M WORK AUTO BODY KENNY RD"
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  type      ShopType?
+
+  phone        String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?                    // 两位州码,如 "CA"
+  zip          String?                    // ★ 配送时效/运费按它算,单独成列
+  country      String  @default("US")
 
   repairOrders RepairOrder[]
+  adminUserId   String? @unique
+  adminUser     User?   @relation("ShopAdmin", fields: [adminUserId], references: [id])
+  members       User[]  @relation("ShopMembers")
+  adminRequests ShopAdminRequest[]
+
+  @@index([zip])                          // 按 zip 查/算配送时会用到
+}
+
+// 平台管理员:直接写库,最高权限
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reviewedRequests ShopAdminRequest[] @relation("RequestReviewedByAdmin")
+  approvedUsers    User[]             @relation("UserApprovedByAdmin")
+}
+
+// 员工:自助注册,需审核
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String?
+
+  shopId String                                        // 注册必选所属店铺
+  shop   Shop   @relation("ShopMembers", fields: [shopId], references: [id])
+
+  status UserStatus @default(PENDING)
+
+  approvedByUserId  String?
+  approvedByUser    User?   @relation("UserApprovedByShopAdmin", fields: [approvedByUserId], references: [id])
+  approvedUsers     User[]  @relation("UserApprovedByShopAdmin")
+  approvedByAdminId String?
+  approvedByAdmin   Admin?  @relation("UserApprovedByAdmin", fields: [approvedByAdminId], references: [id])
+  approvedAt        DateTime?
+
+  adminOf  Shop?              @relation("ShopAdmin")    // 反向:该 user 是哪个店的管理员(≤1)
+  requests ShopAdminRequest[] @relation("RequestByUser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopId])
+  @@index([status])
+  @@index([shopId, status])
+}
+
+// 申请成为店铺管理员(平台管理员审核)
+model ShopAdminRequest {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id])
+  userId String
+  user   User   @relation("RequestByUser", fields: [userId], references: [id])
+
+  kind   ShopAdminRequestKind
+  status ShopAdminRequestStatus @default(PENDING)
+  note   String?
+
+  reviewedByAdminId String?
+  reviewedByAdmin   Admin?    @relation("RequestReviewedByAdmin", fields: [reviewedByAdminId], references: [id])
+  reviewedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopId, status])
+  @@index([status])
 }
 
 // 维修工单(一份 RO,对应一辆车)
