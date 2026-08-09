@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import DeletePartLineButton from "./DeletePartLineButton";
 import QuoteSummary from "./QuoteSummary";
+import { requireLiveSession } from "@/lib/auth/liveSession";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export default async function RoDetailPage({
 }: {
   params: Promise<{ roId: string }>;
 }) {
+  // 权威会话:登录后被停用/降级的账号立刻失效,不等 token 过期
+  await requireLiveSession();
+
   const { roId } = await params;
 
   const ro = await prisma.repairOrder.findUnique({
@@ -72,7 +76,7 @@ export default async function RoDetailPage({
     <main className="w-full max-w-[1440px] mx-auto p-8">
       {/* 面包屑返回 */}
       <Link
-        href="/"
+        href="/ro"
         className="text-sm text-gray-500 hover:text-gray-700 transition inline-flex items-center gap-1"
       >
         ← All repair orders
@@ -94,7 +98,7 @@ export default async function RoDetailPage({
         </div>
       </div>
 
-      {/* 两栏: 左 part lines, 右 quote builder。<lg 时侧栏堆到下面 */}
+      {/* 两栏: 左 part lines, 右 spend summary。<lg 时侧栏堆到下面 */}
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
         <div>
           <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">

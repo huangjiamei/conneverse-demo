@@ -12,9 +12,8 @@ import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { type Candidate, type EnrichedFields } from "@/components/CandidateCard";
 import { selectUserResults } from "@/lib/userResults";
-import { SourcingProvider } from "@/app/search/SourcingContext";
-import QuoteBuilder from "@/app/search/QuoteBuilder";
 import UserResults, { type UserHero } from "./UserResults";
+import { requireLiveSession } from "@/lib/auth/liveSession";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +30,10 @@ export default async function ResultsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // 权威会话:登录后被停用/降级的账号立刻失效,不等 token 过期
+  const session = await requireLiveSession();
+  const isPlatformAdmin = session.role === "PLATFORM_ADMIN";
+
   const { id } = await params;
 
   const search = await prisma.matchSearch.findUnique({
@@ -155,7 +158,7 @@ export default async function ResultsPage({
     minute: "2-digit",
   });
 
-  // 布局与 admin view 对齐: 快照头 + 左结果 / 右 Quote Builder 两栏
+  // 布局与 admin view 对齐: 快照头 + 全宽结果
   return (
     <main className="w-full max-w-[1280px] mx-auto p-6">
       <div className="flex items-center justify-between gap-4">
@@ -166,12 +169,15 @@ export default async function ResultsPage({
           <ChevronLeft size={15} />
           Back to history
         </Link>
-        <Link
-          href={`/search/history/${id}`}
-          className="text-xs text-gray-400 hover:text-[#00B4A6] transition"
-        >
-          Admin view →
-        </Link>
+        {/* Admin view = 带 optimizer 分数 / gate 原因的内部表格,只给平台管理员 */}
+        {isPlatformAdmin && (
+          <Link
+            href={`/search/history/${id}`}
+            className="text-xs text-gray-400 hover:text-[#00B4A6] transition"
+          >
+            Admin view →
+          </Link>
+        )}
       </div>
 
       {/* 搜索快照头 (同 admin) */}
@@ -188,27 +194,21 @@ export default async function ResultsPage({
         <div className="mt-2 text-xs text-white/40">{when}</div>
       </div>
 
-      <SourcingProvider>
-        <div className="mt-6 flex flex-col lg:flex-row gap-6 items-start">
-          <div className="flex-1 min-w-0 w-full">
-            {hasResults ? (
-              <UserResults
-                context={context}
-                heroes={heroes}
-                alternates={alternates}
-              />
-            ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-10 text-center text-sm text-gray-500">
-                No verified matches for this search. Try adjusting the
-                description or part number.
-              </div>
-            )}
+      {/* 结果全宽 —— 图片密集的对比卡片需要横向空间,不再左右分栏 */}
+      <div className="mt-6">
+        {hasResults ? (
+          <UserResults
+            context={context}
+            heroes={heroes}
+            alternates={alternates}
+          />
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-10 text-center text-sm text-gray-500">
+            No verified matches for this search. Try adjusting the description
+            or part number.
           </div>
-          <div className="w-full lg:w-[320px] flex-shrink-0">
-            <QuoteBuilder />
-          </div>
-        </div>
-      </SourcingProvider>
+        )}
+      </div>
     </main>
   );
 }

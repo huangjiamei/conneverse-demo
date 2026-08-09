@@ -11,7 +11,7 @@
  */
 
 import { Fragment, useState } from "react";
-import { Award, Star, ChevronRight, ChevronDown, Check } from "lucide-react";
+import { Award, Star, ChevronRight, ChevronDown } from "lucide-react";
 import {
   type Candidate,
   CandidateDetail,
@@ -20,7 +20,7 @@ import {
   parseSellerPct,
   humanizeGateReason,
 } from "@/components/CandidateCard";
-import { useSourcing } from "./SourcingContext";
+import { PlaceOrderButton } from "@/components/PlaceOrderButton";
 import {
   PRESET_META,
   PRESET_COLORS,
@@ -74,7 +74,8 @@ function PickBadges({
   currentPreset: string;
 }) {
   // 无差别碾压: 所有可见 preset 都是 Top1 → 单个玫红 ★ Best overall (浅底 + 主色文字)
-  if (presets.length >= SHOWN_PRESET_COUNT) {
+  // SHOWN_PRESET_COUNT 为 0 (胶囊全隐藏) 时这条不成立,否则空数组会命中
+  if (SHOWN_PRESET_COUNT > 0 && presets.length >= SHOWN_PRESET_COUNT) {
     const bo = PRESET_COLORS.BestOverall;
     return (
       <span
@@ -102,69 +103,6 @@ function PickBadges({
         <PickPill key={p} preset={p} />
       ))}
     </span>
-  );
-}
-
-// Select 按钮: Add / ✓ Primary / ✓ Alt, 备选满时禁用
-function SelectButton({
-  candidate,
-  siblings,
-}: {
-  candidate: Candidate;
-  siblings: Candidate[];
-}) {
-  const s = useSourcing();
-  const isPrimary = s.primary?.id === candidate.id;
-  const isAlt = s.alternatives.some((a) => a.id === candidate.id);
-  const selected = isPrimary || isAlt;
-  const disabled = !selected && s.primary != null && s.altFull;
-
-  function handleClick() {
-    if (selected) {
-      s.remove(candidate.id);
-    } else if (!s.primary) {
-      s.selectAsPrimary(candidate, siblings);
-    } else if (!s.altFull) {
-      s.selectAsAlternative(candidate);
-    }
-  }
-
-  const base =
-    "inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[13px] font-medium transition whitespace-nowrap";
-  let cls: string;
-  let content: React.ReactNode;
-  if (isPrimary) {
-    cls = "bg-[#1A1A2E] text-white";
-    content = (
-      <>
-        <Check size={12} /> Primary
-      </>
-    );
-  } else if (isAlt) {
-    cls = "bg-teal-100 text-teal-700";
-    content = (
-      <>
-        <Check size={12} /> Alt
-      </>
-    );
-  } else if (disabled) {
-    cls = "bg-gray-200 text-gray-400 cursor-not-allowed";
-    content = "Full";
-  } else {
-    cls = "bg-[#00B4A6] hover:bg-[#00A396] text-white";
-    content = "Select";
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={disabled}
-      title={disabled ? "Alternatives full" : undefined}
-      className={`${base} ${cls}`}
-    >
-      {content}
-    </button>
   );
 }
 
@@ -208,7 +146,7 @@ export function CandidateTable({
           <col className="w-[11%]" /> {/* Warranty */}
           <col className="w-[12%]" /> {/* Price (+ 运费副行, 需要更宽) */}
           <col className="w-[8%]" /> {/* Score */}
-          <col className="w-[11%]" /> {/* Select */}
+          <col className="w-[11%]" /> {/* Place Order */}
           <col className="w-[36px]" /> {/* 展开箭头 */}
         </colgroup>
         <thead>
@@ -231,8 +169,9 @@ export function CandidateTable({
             // 徽章行是否有内容: 可见 preset 全赢, 或去掉当前 preset 后仍有其他可见 preset
             const picks = shownPicks(c.pickInPresets);
             const showPickRow =
-              picks.length >= SHOWN_PRESET_COUNT ||
-              picks.some((p) => p !== currentPreset);
+              picks.length > 0 &&
+              (picks.length >= SHOWN_PRESET_COUNT ||
+                picks.some((p) => p !== currentPreset));
             const isGated = c.optimizerGateReason != null;
             const ef = c.enrichedFields || {};
             const sellerPct = parseSellerPct(ef.seller_feedback_pct);
@@ -343,7 +282,7 @@ export function CandidateTable({
                   </td>
 
                   {/* PRICE (主价 + 运费副行, 与 landed 排序口径一致)。
-                      副行限制在本单元格内换行, 不溢出到 Score / Select。 */}
+                      副行限制在本单元格内换行, 不溢出到 Score / Place Order。 */}
                   <td className="px-3 py-2 text-right align-top">
                     <div className="font-semibold text-[#1A1A2E] whitespace-nowrap">
                       ${c.price}
@@ -388,9 +327,9 @@ export function CandidateTable({
                     )}
                   </td>
 
-                  {/* Select (Add / Primary / Alt) */}
+                  {/* 下单入口 —— 功能未做,统一禁用 */}
                   <td className="px-3 py-2">
-                    <SelectButton candidate={c} siblings={sorted} />
+                    <PlaceOrderButton size="sm" />
                   </td>
 
                   {/* 展开箭头 */}

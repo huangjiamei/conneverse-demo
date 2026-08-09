@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import SearchClient from "./SearchClient";
 import { DEFAULT_PRESET } from "@/lib/presets";
+import { requireLiveSession } from "@/lib/auth/liveSession";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,9 @@ export default async function SearchPage({
 }: {
   params: Promise<{ roId: string; partLineId: string }>;
 }) {
+  // 权威会话:登录后被停用/降级的账号立刻失效,不等 token 过期
+  await requireLiveSession();
+
   const { roId, partLineId } = await params;
 
   const partLine = await prisma.partLine.findUnique({

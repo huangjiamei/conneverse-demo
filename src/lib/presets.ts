@@ -21,7 +21,15 @@ export const VALID_PRESETS = [
 export const VALID_PRESET_SET: ReadonlySet<string> = new Set(VALID_PRESETS);
 
 /**
- * UI 里给用户看的 preset (Job Status 胶囊)。顺序即展示顺序, Budget 在前 (它是默认)。
+ * UI 里给用户看的 preset (Job Status 胶囊 / pick 徽章)。顺序即展示顺序。
+ *
+ * 只作用于 admin 侧的界面 —— admin view (/search/history/[id] 的候选表格) 和
+ * RO 零件搜索页,两者都只有平台管理员能进。
+ *
+ * 门店用户走的 /search 不读这个数组: 那边的 Job Status 选择器和
+ * "Ranked by X" 徽章已经整体移除,因为客户视图的 heroes 是从三份 preset 排名里
+ * 挑的 (Cheapest / Fastest / Best overall),本身不随当前 preset 变化,
+ * 切了看不出区别。
  *
  * 刻意与 VALID_PRESETS 分开: 后端仍然接受全部 8 个名字, prewarm 也照旧算 4 个
  * preset —— 隐藏纯粹是展示层的事。这样历史记录里存的 Balanced/Premium、以及

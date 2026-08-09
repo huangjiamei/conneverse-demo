@@ -13,18 +13,13 @@
  */
 
 import { useEffect, useState } from "react";
-import {
-  Loader2, Search, Car,
-  ChevronDown, ChevronUp, X, Clock,
-} from "lucide-react";
+import { Loader2, Search, Car, ChevronDown, Clock } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { type Candidate } from "@/components/CandidateCard";
-import { CandidateTable } from "./CandidateTable";
-import { PRESET_META, PRESET_COLORS } from "./presetMeta";
-import { SHOWN_PRESETS, DEFAULT_PRESET } from "@/lib/presets";
-import { useSourcing } from "./SourcingContext";
+import { DEFAULT_PRESET } from "@/lib/presets";
 import { applyPositions } from "@/constants/positionWords";
+import UserResults from "@/app/results/[id]/UserResults";
+import type { UserResultsPayload } from "@/lib/userResultsData";
 
 // Popular vehicles —— 前端硬编码, 点一下用 /api/vehicles/resolve 反查 id 再填下拉。
 // 注意: "Silverado" 在 VCdb 里不存在, 实际叫 "Silverado 1500"。
@@ -35,14 +30,6 @@ const POPULAR = [
   { year: 2022, makeName: "Toyota", modelName: "RAV4" },
   { year: 2021, makeName: "Chevrolet", modelName: "Silverado 1500" },
 ] as const;
-
-// Job Status preset 胶囊 —— 只展示 SHOWN_PRESETS (Budget 在前), 标签/图标复用 PRESET_META。
-// 后端仍接受全部 preset, 隐藏的只是不给用户选。
-const PRESET_OPTIONS = SHOWN_PRESETS.map((key) => ({
-  key,
-  label: PRESET_META[key].label,
-  Icon: PRESET_META[key].Icon,
-}));
 
 type YearOpt = { id: number };
 type NamedOpt = { id: number; name: string };
@@ -87,10 +74,12 @@ type SearchResponse = {
   candidates: Candidate[];
 };
 
-export default function VehicleSearchClient() {
-  const router = useRouter();
-  const { resetSelections, setQuoteContext } = useSourcing();
-
+export default function VehicleSearchClient({
+  isPlatformAdmin,
+}: {
+  /** 只有平台管理员能进 /search/history/[id] 那张内部表格 */
+  isPlatformAdmin: boolean;
+}) {
   // 各层选项列表
   const [years, setYears] = useState<YearOpt[]>([]);
   const [makes, setMakes] = useState<NamedOpt[]>([]);
@@ -109,9 +98,8 @@ export default function VehicleSearchClient() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingSubmodels, setLoadingSubmodels] = useState(false);
 
-  // Job Status preset (默认 Budget)
-  const [preset, setPreset] = useState<string>(DEFAULT_PRESET);
-  const [switchingPreset, setSwitchingPreset] = useState<string | null>(null);
+  // Job Status 选择器已下线,排序视角固定为默认 preset (后端仍按它排)
+  const preset = DEFAULT_PRESET;
 
   // 零件信息 + 搜索
   const [partDescription, setPartDescription] = useState("");
@@ -119,8 +107,9 @@ export default function VehicleSearchClient() {
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [matchSearchId, setMatchSearchId] = useState<string | null>(null);
+  // 结果内联在本页渲染 (不再跳 /results/[id])
+  const [userResults, setUserResults] = useState<UserResultsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showOthers, setShowOthers] = useState(false);
 
   // PCdb: 分类级联下拉 + 搜索为主
   const [categories, setCategories] = useState<CategoryOpt[]>([]);
@@ -280,13 +269,6 @@ export default function VehicleSearchClient() {
   }
 
   // 清空输入框 (× 或删空) → 解绑 Part; auto 分类清, user 分类留
-  function clearPartInput() {
-    setPartDescription("");
-    setSelectedPartId(null);
-    setSearchResults([]);
-    clearScopeIfAuto();
-  }
-
   // 清空全部: 分类回全局 + 描述 + 选中 Part + 来源 全清
   function clearAll() {
     setScopeCat(null);
@@ -447,15 +429,7 @@ export default function VehicleSearchClient() {
     setError(null);
     setSearching(true);
     setResult(null);
-    resetSelections(); // 新搜索清空上一次的报价选择 (labor/tax 参数保留)
-    // 快照 vehicle + part 给 PDF 用 (subSelection/makeName/modelName 此刻都有值)
-    const vLabel =
-      makeName && modelName
-        ? subSelection.kind === "one"
-          ? `${year} ${makeName} ${modelName} ${subSelection.opt.name}`
-          : `${year} ${makeName} ${modelName}`
-        : capsuleLabel;
-    setQuoteContext(vLabel, partDescription);
+    setUserResults(null);
     try {
       const res = await fetch("/api/search-vehicle", {
         method: "POST",
@@ -480,13 +454,12 @@ export default function VehicleSearchClient() {
       }
       const data: SearchResponse = await res.json();
       setMatchSearchId(data.matchSearchId ?? null);
-      // 默认落到 customer view (用户侧合并结果)。admin 表格仍可从那里 "Admin view →" 进入。
-      // 有 id 就不在本页渲染 admin 表 (避免跳转前闪一下), 直接跳。
-      if (data.matchSearchId) {
-        router.push(`/results/${data.matchSearchId}`);
-        return;
-      }
       setResult(data);
+      // 结果就在本页下方渲染 —— 客户视图的卡片由 /api/results/[id] 组装
+      // (heroes/alternates 的挑选要读三份 preset 排名,只有服务端有)
+      if (data.matchSearchId) {
+        await loadUserResults(data.matchSearchId);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
@@ -494,70 +467,36 @@ export default function VehicleSearchClient() {
     }
   }
 
-  // 切 Job Status 胶囊:
-  //   - 还没搜过 → 只更新前端 preset state (下次搜索用新 preset)
-  //   - 已有结果 → 调 /api/switch-preset 重排 (命中缓存就不用重跑 matcher)
-  async function handlePresetSwitch(newPreset: string) {
-    if (newPreset === preset) return;
-    setPreset(newPreset); // optimistic
-
-    if (!matchSearchId) return;
-
-    setError(null);
-    setSwitchingPreset(newPreset);
+  // 客户视图结果 (heroes / alternates) —— 服务端按三份 preset 排名挑好后返回
+  async function loadUserResults(id: string) {
     try {
-      const res = await fetch("/api/switch-preset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ matchSearchId, preset: newPreset }),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Switch failed: HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      setResult((prev) =>
-        prev
-          ? {
-              ...prev,
-              candidateCount: data.candidateCount,
-              candidates: data.candidates,
-              optimizerMeta: data.optimizerMeta,
-              preset: newPreset,
-            }
-          : prev
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Switch failed");
-    } finally {
-      setSwitchingPreset(null);
+      const res = await fetch(`/api/results/${id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setUserResults((await res.json()) as UserResultsPayload);
+    } catch {
+      // 结果拿不到不算搜索失败 —— 上面的 result 里已有计数,给一句提示即可
+      setError("Search finished, but the results could not be loaded. Reload to retry.");
     }
   }
 
-  const verified = result?.candidates.filter((c) => c.candidateLabel === 1) ?? [];
-  const others = result?.candidates.filter((c) => c.candidateLabel !== 1) ?? [];
+  // 能不能搜 —— 放大镜按钮和 Enter 共用同一个判断
+  const canSearch = !searching && partDescription.trim() !== "" && vehicleSelected;
+
+  const heroCount =
+    (userResults?.heroes.length ?? 0) + (userResults?.alternates.length ?? 0);
 
   return (
     <>
-      {/* 顶部深蓝 banner */}
-      <div className="bg-[#1A1A2E] text-white rounded-xl p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-xs text-white/50 tracking-wide">Vehicle lookup</div>
-            <div className="mt-1 text-2xl font-semibold">New search</div>
-            <div className="mt-1 text-xs text-white/40">
-              Pick a vehicle from the ACES / VCdb catalog, then search parts — no
-              repair order needed.
-            </div>
-          </div>
-          <Link
-            href="/search/history"
-            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/20 text-white/80 text-xs hover:bg-white/10 transition"
-          >
-            <Clock size={13} />
-            History
-          </Link>
-        </div>
+      {/* 页面工具条: 纯文字标题 + 右上角 Search History (深色 banner 已移除) */}
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-xl font-semibold text-[#1A1A2E]">Search</h1>
+        <Link
+          href="/search/history"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-[13px] font-medium text-[#1A1A2E] transition hover:border-gray-400 hover:bg-gray-50"
+        >
+          <Clock size={13} />
+          Search History
+        </Link>
       </div>
 
       {/* 车辆胶囊 + 零件表单 */}
@@ -860,17 +799,20 @@ export default function VehicleSearchClient() {
                   )}
                 </div>
 
-                {/* 搜索框 = partDescription (保留用户输入, 带方位)。带 × 清空 */}
+                {/* 搜索框 = partDescription (保留用户输入, 带方位)。
+                    右侧放大镜就是提交按钮,Enter 等价 —— 没有单独的搜索按钮。 */}
                 <div className="relative flex-1 min-w-0">
-                  <Search
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
                   <input
                     value={partDescription}
                     onChange={(e) => onPartDescriptionChange(e.target.value)}
                     onFocus={() => {
                       if (selectedPartId == null) setResultsOpen(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      setResultsOpen(false); // 收起联想列表,直接搜
+                      if (canSearch) handleSearch();
                     }}
                     placeholder={
                       scopeSub
@@ -879,18 +821,31 @@ export default function VehicleSearchClient() {
                           ? `Search in ${scopeCat.name}…`
                           : "Search all parts…"
                     }
-                    className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
+                    className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
                   />
-                  {partDescription && (
-                    <button
-                      type="button"
-                      onClick={clearPartInput}
-                      aria-label="Clear search"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResultsOpen(false);
+                      handleSearch();
+                    }}
+                    disabled={!canSearch}
+                    aria-label="Search"
+                    title={
+                      !vehicleSelected
+                        ? "Select a vehicle first"
+                        : !partDescription
+                          ? "Enter a part first"
+                          : "Search"
+                    }
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-[#00B4A6] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                  >
+                    {searching ? (
+                      <Loader2 size={15} className="animate-spin text-[#00B4A6]" />
+                    ) : (
+                      <Search size={15} />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -998,60 +953,8 @@ export default function VehicleSearchClient() {
           )}
         </div>
 
-        {/* Row 2: Job Status 胶囊 (左) + Search eBay (右). 始终显示;
-            未选车时 Search 禁用但可见 */}
-        <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col sm:flex-row sm:items-end gap-4">
-          <div className="flex-1">
-            <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
-              Job status
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {PRESET_OPTIONS.map(({ key, label, Icon }) => {
-                const selected = preset === key;
-                const loading = switchingPreset === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handlePresetSwitch(key)}
-                    disabled={switchingPreset != null}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[13px] transition disabled:opacity-60 ${
-                      selected
-                        ? "bg-[#00B4A6] border-[#00B4A6] text-white font-medium"
-                        : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    {loading ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Icon size={12} />
-                    )}
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <button
-            onClick={handleSearch}
-            disabled={searching || !partDescription || !vehicleSelected}
-            title={!vehicleSelected ? "Select a vehicle first" : undefined}
-            className="sm:ml-auto shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
-          >
-            {searching ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                Searching eBay…
-              </>
-            ) : (
-              <>
-                <Search size={14} />
-                Search eBay
-              </>
-            )}
-          </button>
-        </div>
+        {/* 没有独立的搜索按钮 —— 提交入口是 Part 输入框右侧的放大镜 / Enter。
+            Job Status 选择器也已移除 (见 lib/presets.ts 的 SHOWN_PRESETS)。 */}
 
         {error && (
           <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -1060,79 +963,42 @@ export default function VehicleSearchClient() {
         )}
       </div>
 
-      {/* 结果区 */}
-      {result && !searching && (
+
+      {/* ---- 结果:内联在搜索页下方,全宽 ---- */}
+      {searching && (
+        <div className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white p-10 text-sm text-gray-500">
+          <Loader2 size={16} className="animate-spin" />
+          Searching eBay…
+        </div>
+      )}
+
+      {!searching && userResults && (
         <div className="mt-6">
-          <div className="flex items-baseline justify-between gap-3 mb-3">
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide flex items-center gap-2">
-              Verified candidates ({verified.length})
-              {result.optimizerMeta &&
-                result.optimizerMeta.eligibleCount > 0 &&
-                result.optimizerMeta.preset &&
-                (() => {
-                  const meta = PRESET_META[result.optimizerMeta.preset];
-                  const color = PRESET_COLORS[result.optimizerMeta.preset];
-                  if (!meta || !color) return null;
-                  const { Icon } = meta;
-                  return (
-                    <span
-                      style={{
-                        backgroundColor: color.bg,
-                        color: color.text,
-                        borderColor: color.text,
-                        borderWidth: "1.5px",
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold normal-case tracking-normal"
-                    >
-                      <Icon size={11} />
-                      Ranked by {meta.label}
-                    </span>
-                  );
-                })()}
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-gray-500">
+              Results ({heroCount})
             </h2>
-            {matchSearchId && verified.length > 0 && (
+            {/* 内部表格只给平台管理员 */}
+            {isPlatformAdmin && matchSearchId && (
               <Link
-                href={`/results/${matchSearchId}`}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1A2E] text-white text-xs font-medium hover:bg-[#2a2a44] transition"
+                href={`/search/history/${matchSearchId}`}
+                className="shrink-0 text-xs text-gray-400 transition hover:text-[#00B4A6]"
               >
-                Customer view →
+                Admin view →
               </Link>
             )}
           </div>
 
-          {verified.length === 0 ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-sm text-gray-500">
+          {heroCount === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
               No verified matches. Try adjusting the description or part number.
             </div>
           ) : (
-            <CandidateTable candidates={verified} currentPreset={preset} />
-          )}
-
-          {others.length > 0 && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => setShowOthers((s) => !s)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-gray-200 bg-gray-50 text-xs text-gray-600 hover:bg-gray-100 transition"
-              >
-                <span className="uppercase tracking-wide font-medium">
-                  Other candidates ({others.length})
-                  <span className="text-gray-400 ml-1 normal-case tracking-normal font-normal">
-                    (uncertain / rejected)
-                  </span>
-                </span>
-                {showOthers ? (
-                  <ChevronUp size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
-              </button>
-              {showOthers && (
-                <div className="mt-2">
-                  <CandidateTable candidates={others} currentPreset={preset} />
-                </div>
-              )}
-            </div>
+            <UserResults
+              context={userResults.context}
+              heroes={userResults.heroes}
+              alternates={userResults.alternates}
+            />
           )}
         </div>
       )}

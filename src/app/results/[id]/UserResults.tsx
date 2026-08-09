@@ -19,7 +19,7 @@ import {
   formatDeliveryRange,
   formatWarranty,
 } from "@/components/CandidateCard";
-import { useSourcing } from "@/app/search/SourcingContext";
+import { PlaceOrderButton } from "@/components/PlaceOrderButton";
 import type { HeroBadge } from "@/lib/userResults";
 
 export type UserHero = { candidate: Candidate; badge: HeroBadge };
@@ -94,81 +94,6 @@ function rowPrice(c: Candidate): { main: string; note: string | null } {
   if (ship == null)
     return { main: `$${price.toFixed(2)}`, note: "+ shipping at checkout" };
   return { main: `$${(price + ship).toFixed(2)}`, note: null };
-}
-
-// ---- Select (reuses SourcingContext, same rules as admin) ----
-
-function UserSelect({
-  candidate,
-  siblings,
-  variant,
-  stopPropagation,
-}: {
-  candidate: Candidate;
-  siblings: Candidate[];
-  variant: "solid" | "outline";
-  stopPropagation?: boolean;
-}) {
-  const s = useSourcing();
-  const isPrimary = s.primary?.id === candidate.id;
-  const isAlt = s.alternatives.some((a) => a.id === candidate.id);
-  const selected = isPrimary || isAlt;
-  const disabled = !selected && s.primary != null && s.altFull;
-
-  function handleClick(e: React.MouseEvent) {
-    if (stopPropagation) e.stopPropagation();
-    if (selected) s.remove(candidate.id);
-    else if (!s.primary) s.selectAsPrimary(candidate, siblings);
-    else if (!s.altFull) s.selectAsAlternative(candidate);
-  }
-
-  let content: React.ReactNode = "Select";
-  if (isPrimary)
-    content = (
-      <>
-        <Check size={12} /> Primary
-      </>
-    );
-  else if (isAlt)
-    content = (
-      <>
-        <Check size={12} /> Alt
-      </>
-    );
-  else if (disabled) content = "Full";
-
-  const solid =
-    "bg-[#00B4A6] hover:bg-[#00A396] text-white px-5 py-2 text-[13px] font-bold";
-  const outline =
-    "border border-[#00B4A6] text-[#00B4A6] hover:bg-teal-50 px-4 py-1.5 text-[12px] font-bold";
-  const chosen =
-    variant === "solid"
-      ? isPrimary
-        ? "bg-[#1A1A2E] text-white px-5 py-2 text-[13px] font-bold"
-        : isAlt
-          ? "bg-teal-100 text-teal-700 px-5 py-2 text-[13px] font-bold"
-          : disabled
-            ? "bg-gray-200 text-gray-400 cursor-not-allowed px-5 py-2 text-[13px] font-bold"
-            : solid
-      : isPrimary
-        ? "bg-[#1A1A2E] text-white px-4 py-1.5 text-[12px] font-bold"
-        : isAlt
-          ? "bg-teal-100 text-teal-700 px-4 py-1.5 text-[12px] font-bold"
-          : disabled
-            ? "bg-gray-200 text-gray-400 cursor-not-allowed px-4 py-1.5 text-[12px] font-bold"
-            : outline;
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={disabled}
-      title={disabled ? "Alternatives full" : undefined}
-      className={`shrink-0 inline-flex items-center gap-1 rounded-lg transition whitespace-nowrap ${chosen}`}
-    >
-      {content}
-    </button>
-  );
 }
 
 // ---- gallery (switch + zoom) --------------------------------
@@ -249,12 +174,10 @@ function Section({
 function ExpandedCard({
   candidate,
   badge,
-  siblings,
   onZoom,
 }: {
   candidate: Candidate;
   badge?: HeroBadge;
-  siblings: Candidate[];
   onZoom: (gallery: string[], index: number) => void;
 }) {
   const px = cardPrice(candidate);
@@ -342,7 +265,7 @@ function ExpandedCard({
               </div>
             )}
           </div>
-          <UserSelect candidate={candidate} siblings={siblings} variant="solid" />
+          <PlaceOrderButton size="md" />
         </div>
       </div>
     </div>
@@ -353,11 +276,9 @@ function ExpandedCard({
 
 function AlternateRow({
   candidate,
-  siblings,
   onZoom,
 }: {
   candidate: Candidate;
-  siblings: Candidate[];
   onZoom: (gallery: string[], index: number) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -396,12 +317,7 @@ function AlternateRow({
             </div>
           )}
         </div>
-        <UserSelect
-          candidate={candidate}
-          siblings={siblings}
-          variant="outline"
-          stopPropagation
-        />
+        <PlaceOrderButton size="sm" />
         <ChevronDown
           size={16}
           className={`text-gray-400 shrink-0 transition ${open ? "rotate-180" : ""}`}
@@ -409,7 +325,7 @@ function AlternateRow({
       </div>
       {open && (
         <div className="mt-1.5">
-          <ExpandedCard candidate={candidate} siblings={siblings} onZoom={onZoom} />
+          <ExpandedCard candidate={candidate} onZoom={onZoom} />
         </div>
       )}
     </div>
@@ -633,14 +549,6 @@ export default function UserResults({
   } | null>(null);
   const openLightbox = (gallery: string[], index: number) =>
     setLightbox({ gallery, index });
-  const siblings = [...heroes.map((h) => h.candidate), ...alternates];
-
-  // Quote Builder / PDF 的抬头 (否则 PDF 上是 "Vehicle" 占位)
-  const { setQuoteContext } = useSourcing();
-  useEffect(() => {
-    setQuoteContext(context.vehicle, context.part);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.vehicle, context.part]);
 
   return (
     <div>
@@ -650,7 +558,6 @@ export default function UserResults({
             key={h.candidate.id}
             candidate={h.candidate}
             badge={h.badge}
-            siblings={siblings}
             onZoom={openLightbox}
           />
         ))}
@@ -666,7 +573,6 @@ export default function UserResults({
               <AlternateRow
                 key={a.id}
                 candidate={a}
-                siblings={siblings}
                 onZoom={openLightbox}
               />
             ))}

@@ -1,7 +1,7 @@
 /**
  * /search/history/[id] — 单次搜索的复盘详情 (只读, 从库里读, 不重打 eBay)。
  *
- * 复用 /search 的 CandidateTable + QuoteBuilder。排序视角固定为 Balanced
+ * 复用 /search 的 CandidateTable。排序视角固定为 Balanced
  * (与历史列表的 Top pick 一致): 候选的 optimizer* 用 Balanced 的
  * OptimizerResult 覆盖, pickInPresets 照常从四个 preset 算。
  */
@@ -12,9 +12,8 @@ import { ChevronLeft, Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { type Candidate, type EnrichedFields } from "@/components/CandidateCard";
 import { CandidateTable } from "../../CandidateTable";
-import { SourcingProvider } from "../../SourcingContext";
-import QuoteBuilder from "../../QuoteBuilder";
 import { computePickInPresets } from "@/lib/prewarm-presets";
+import { requireLivePlatformAdmin } from "@/lib/auth/liveSession";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +32,10 @@ export default async function HistoryDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // 权威会话:登录后被停用/降级的账号立刻失效,不等 token 过期
+  // Admin view: 内部表格,页面这一层再挡一次 (proxy 已经拦过一道)
+  await requireLivePlatformAdmin();
+
   const { id } = await params;
 
   const search = await prisma.matchSearch.findUnique({
@@ -136,7 +139,7 @@ export default async function HistoryDetailPage({
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] transition"
           >
             <Plus size={14} />
-            New search
+            Search
           </Link>
         </div>
       </div>
@@ -156,37 +159,31 @@ export default async function HistoryDetailPage({
         <div className="mt-2 text-xs text-white/40">{when}</div>
       </div>
 
-      <SourcingProvider>
-        <div className="mt-6 flex flex-col lg:flex-row gap-6 items-start">
-          <div className="flex-1 min-w-0 w-full">
-            <div className="mb-3 text-sm font-medium text-gray-500 uppercase tracking-wide">
-              Verified candidates ({verified.length})
-            </div>
-            {verified.length === 0 ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-sm text-gray-500">
-                No verified matches in this search.
-              </div>
-            ) : (
-              <CandidateTable candidates={verified} currentPreset={HISTORY_PRESET} />
-            )}
-
-            {others.length > 0 && (
-              <div className="mt-6">
-                <div className="mb-2 text-xs uppercase tracking-wide font-medium text-gray-500">
-                  Other candidates ({others.length})
-                  <span className="text-gray-400 ml-1 normal-case tracking-normal font-normal">
-                    (uncertain / rejected)
-                  </span>
-                </div>
-                <CandidateTable candidates={others} currentPreset={HISTORY_PRESET} />
-              </div>
-            )}
-          </div>
-          <div className="w-full lg:w-[320px] flex-shrink-0">
-            <QuoteBuilder />
-          </div>
+      {/* 表格全宽 —— 报价侧栏已移除 */}
+      <div className="mt-6">
+        <div className="mb-3 text-sm font-medium text-gray-500 uppercase tracking-wide">
+          Verified candidates ({verified.length})
         </div>
-      </SourcingProvider>
+        {verified.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-sm text-gray-500">
+            No verified matches in this search.
+          </div>
+        ) : (
+          <CandidateTable candidates={verified} currentPreset={HISTORY_PRESET} />
+        )}
+
+        {others.length > 0 && (
+          <div className="mt-6">
+            <div className="mb-2 text-xs uppercase tracking-wide font-medium text-gray-500">
+              Other candidates ({others.length})
+              <span className="text-gray-400 ml-1 normal-case tracking-normal font-normal">
+                (uncertain / rejected)
+              </span>
+            </div>
+            <CandidateTable candidates={others} currentPreset={HISTORY_PRESET} />
+          </div>
+        )}
+      </div>
     </main>
   );
 }

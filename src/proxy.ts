@@ -1,39 +1,59 @@
 /**
- * Proxy (formerly "middleware" — renamed in Next.js 16).
+ * 路由守卫。
  *
- * Auth stub: ensures every visitor carries a `cv_session` cookie. It's
- * issued on the first page/app response, so by the time client code
- * fetches /api/*, the cookie is present and same-origin requests send
- * it automatically. Raw scrapers that never load the app — and so never
- * receive the cookie — are rejected by `withApi` on the API routes.
+ * Next 16 起 middleware 改名为 Proxy (文件必须叫 proxy.ts,和 app/ 同级),
+ * 默认跑 Node.js runtime —— 但这里仍然只验 JWT 签名、不查库:
+ * 官方明确说 Proxy 不该承担完整鉴权,页面/API 里还有第二道 requireLiveSession()。
  *
- * State-free by design (proxy may run at the edge): it only sets a
- * cookie. The actual gate + rate limit live in `withApi`, called from
- * each route handler.
+ * 规则 (采用 §5 方案 A: 未批准的用户根本拿不到会话):
+ *   无会话 + 公开路径      → 放行
+ *   无会话 + 其它          → 跳 / (登录)
+ *   有会话 + / 或 /register → 跳各自 landing
+ *   有会话 + 越权          → 跳各自 landing
  */
 
-import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, issueSessionToken } from "@/lib/api/session";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/jwt";
+import {
+  canAccess,
+  isPublicPath,
+  landingPath,
+  shouldRedirectAwayFrom,
+} from "@/lib/auth/routes";
 
-export function proxy(request: NextRequest) {
-  const response = NextResponse.next();
+export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const session = await verifySessionToken(
+    req.cookies.get(SESSION_COOKIE)?.value
+  );
 
-  if (!request.cookies.get(SESSION_COOKIE)) {
-    // Seed a session. Demo-grade entropy — a signed session would go
-    // here in production.
-    const seed = `${request.headers.get("user-agent") ?? "ua"}:${request.nextUrl.pathname}:${Date.now()}`;
-    response.cookies.set(SESSION_COOKIE, issueSessionToken(seed), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-    });
+  // API 不该被 302 到 HTML 登录页 —— 给调用方一个能判断的 401/403
+  const isApi = pathname.startsWith("/api/");
+
+  if (!session) {
+    if (isPublicPath(pathname)) return NextResponse.next();
+    if (isApi) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
-  return response;
+  const landing = landingPath(session);
+
+  if (shouldRedirectAwayFrom(pathname)) {
+    return NextResponse.redirect(new URL(landing, req.url));
+  }
+  if (!canAccess(session, pathname)) {
+    if (isApi) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL(landing, req.url));
+  }
+  return NextResponse.next();
 }
 
 export const config = {
-  // Run on everything except static assets and image optimization, so
-  // the session cookie is set on the very first document load.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // 跳过静态资源和 Next 内部路径,其余全过守卫
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|txt|xml)$).*)"],
 };

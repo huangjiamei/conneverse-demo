@@ -71,25 +71,11 @@ export type Candidate = {
 // Helpers
 // ============================================================
 
-function daysFromNow(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const now = new Date();
-  const diffMs = d.getTime() - now.getTime();
-  return Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-}
-
-export function formatDeliveryRange(min: string | null | undefined, max: string | null | undefined): string | null {
-  const mn = daysFromNow(min);
-  const mx = daysFromNow(max);
-  if (mn == null && mx == null) return null;
-  if (mn != null && mx != null) {
-    if (mn === mx) return `${mn}d`;
-    return `${mn}–${mx}d`;
-  }
-  return `~${mn ?? mx}d`;
-}
+// 实现在 lib/formatDelivery (无 "use client", 服务端也要用)。
+// 这里 re-export, 现有 `from "@/components/CandidateCard"` 的 import 照旧可用;
+// 本文件内部也要用, 所以同时 import 进来。
+import { formatDeliveryRange } from "@/lib/formatDelivery";
+export { formatDeliveryRange };
 
 export function formatWarranty(raw: string | null | undefined): string | null {
   if (!raw) return null;

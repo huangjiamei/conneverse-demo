@@ -1,5 +1,8 @@
 /**
- * Quote Builder 侧栏 — RO 详情页右侧的累计汇总。
+ * Spend summary 侧栏 — RO 详情页右侧的累计汇总。
+ *
+ * 只读:统计已下单实付和相对历史价的节省。这里没有报价单功能 ——
+ * 报价单已整体移除,流程只剩「搜索 → 看结果 →(将来)下单」。
  *
  * 只用库里真实存在的数据:
  *   - PurchaseOrder.price × quantity      → 已下单实付
@@ -49,7 +52,7 @@ export default function QuoteSummary({
     <aside className="xl:sticky xl:top-20">
       {/* 标题提到卡片外,和左栏 "Part lines (N)" 用同一套 h2 样式对齐 */}
       <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">
-        Quote builder
+        Spend summary
       </h2>
 
       <div className="space-y-4">
