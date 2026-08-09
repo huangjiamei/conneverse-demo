@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/seed-auth.ts
  *
- * 管理员口令从 SEED_ADMIN_PASSWORD 读,缺省 ChangeMe123!(仅本地演示用)。
+ * 管理员口令从 SEED_ADMIN_PASSWORD 读,缺省 Conneverse123!(仅本地演示用)。
  * 已存在的 Admin 不会被改密 —— 想重置就先删了那行再跑,或显式传 --reset-password。
  */
 
@@ -12,7 +12,7 @@ import { prisma } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/auth/password";
 
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@conneverse.com";
-const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "Conneverse123!";
 const RESET_PASSWORD = process.argv.includes("--reset-password");
 
 const DEMO_SHOPS = [
