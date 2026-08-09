@@ -480,7 +480,16 @@ export default function VehicleSearchClient({
   }
 
   // 能不能搜 —— 放大镜按钮和 Enter 共用同一个判断
-  const canSearch = !searching && partDescription.trim() !== "" && vehicleSelected;
+  // 不能搜时的具体原因 —— 按钮 title 和输入框下方的提示共用。
+  // 之前只有 title 悬浮提示, 键盘用户和没悬停的人完全不知道为什么点不动。
+  const blockReason: string | null = searching
+    ? null
+    : !vehicleSelected
+      ? "Select a vehicle to search."
+      : partDescription.trim() === ""
+        ? "Enter a part to search."
+        : null;
+  const canSearch = !searching && blockReason === null;
 
   const heroCount =
     (userResults?.heroes.length ?? 0) + (userResults?.alternates.length ?? 0);
@@ -831,23 +840,26 @@ export default function VehicleSearchClient({
                     }}
                     disabled={!canSearch}
                     aria-label="Search"
-                    title={
-                      !vehicleSelected
-                        ? "Select a vehicle first"
-                        : !partDescription
-                          ? "Enter a part first"
-                          : "Search"
-                    }
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-[#00B4A6] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                    title={blockReason ?? "Search"}
+                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
+                      canSearch || searching
+                        ? "bg-[#00B4A6] text-white hover:bg-[#00A396]"
+                        : "cursor-not-allowed bg-gray-100 text-gray-300"
+                    }`}
                   >
                     {searching ? (
-                      <Loader2 size={15} className="animate-spin text-[#00B4A6]" />
+                      <Loader2 size={15} className="animate-spin" />
                     ) : (
                       <Search size={15} />
                     )}
                   </button>
                 </div>
               </div>
+
+              {/* 点不动时把原因说出来, 而不是只给一个悬浮 title */}
+              {blockReason && partDescription.trim() !== "" && (
+                <p className="mt-1.5 text-xs text-amber-600">{blockReason}</p>
+              )}
 
               {/* 结果: 有输入 → 搜索结果(面包屑); 无输入但选了子类 → 该子类 Part 列表 */}
               {resultsOpen &&
@@ -968,7 +980,7 @@ export default function VehicleSearchClient({
       {searching && (
         <div className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white p-10 text-sm text-gray-500">
           <Loader2 size={16} className="animate-spin" />
-          Searching eBay…
+          Searching Conneverse…
         </div>
       )}
 

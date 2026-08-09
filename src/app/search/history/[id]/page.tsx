@@ -14,6 +14,7 @@ import { type Candidate, type EnrichedFields } from "@/components/CandidateCard"
 import { CandidateTable } from "../../CandidateTable";
 import { computePickInPresets } from "@/lib/prewarm-presets";
 import { requireLivePlatformAdmin } from "@/lib/auth/liveSession";
+import { searchVisibilityWhere } from "@/lib/searchScope";
 
 export const dynamic = "force-dynamic";
 
@@ -34,12 +35,14 @@ export default async function HistoryDetailPage({
 }) {
   // 权威会话:登录后被停用/降级的账号立刻失效,不等 token 过期
   // Admin view: 内部表格,页面这一层再挡一次 (proxy 已经拦过一道)
-  await requireLivePlatformAdmin();
+  const session = await requireLivePlatformAdmin();
 
   const { id } = await params;
 
-  const search = await prisma.matchSearch.findUnique({
-    where: { id },
+  // 带可见范围查 —— 平台管理员范围是全部, 但规则走同一个 helper,
+  // 以后放宽这页的角色时不会漏掉鉴权。
+  const search = await prisma.matchSearch.findFirst({
+    where: { id, ...searchVisibilityWhere(session) },
     include: { candidates: { orderBy: { rank: "asc" } } },
   });
   if (!search) notFound();

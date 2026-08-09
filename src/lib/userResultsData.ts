@@ -9,6 +9,7 @@
  * no matcher or optimizer work happens here.
  */
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { Candidate, EnrichedFields } from "@/components/CandidateCard";
 import { selectUserResults, type HeroBadge } from "@/lib/userResults";
@@ -39,12 +40,17 @@ type RawCandidate = {
 
 const RANKED_PRESETS = ["Budget", "Rush", "Balanced"] as const;
 
-/** @returns null when the search doesn't exist */
+/**
+ * @param scope 可见范围片段 (lib/searchScope)。并进 where 里一次查,
+ *   不在范围内和不存在一样都返回 null —— 调用方统一当 404, 不泄露"存在但没权限"。
+ * @returns null when the search doesn't exist or is out of scope
+ */
 export async function loadUserResults(
-  matchSearchId: string
+  matchSearchId: string,
+  scope: Prisma.MatchSearchWhereInput = {}
 ): Promise<UserResultsPayload | null> {
-  const search = await prisma.matchSearch.findUnique({
-    where: { id: matchSearchId },
+  const search = await prisma.matchSearch.findFirst({
+    where: { id: matchSearchId, ...scope },
     include: { candidates: { orderBy: { rank: "asc" } } },
   });
   if (!search) return null;

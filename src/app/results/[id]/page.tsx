@@ -14,6 +14,7 @@ import { type Candidate, type EnrichedFields } from "@/components/CandidateCard"
 import { selectUserResults } from "@/lib/userResults";
 import UserResults, { type UserHero } from "./UserResults";
 import { requireLiveSession } from "@/lib/auth/liveSession";
+import { searchVisibilityWhere } from "@/lib/searchScope";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +37,9 @@ export default async function ResultsPage({
 
   const { id } = await params;
 
-  const search = await prisma.matchSearch.findUnique({
-    where: { id },
+  // 可见范围校验 —— 列表过滤了不够, 直接开别人的 id 也要挡住
+  const search = await prisma.matchSearch.findFirst({
+    where: { id, ...searchVisibilityWhere(session) },
     include: { candidates: { orderBy: { rank: "asc" } } },
   });
   if (!search) notFound();

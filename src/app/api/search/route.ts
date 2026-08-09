@@ -13,6 +13,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prewarmOtherPresets, computePickInPresets } from "@/lib/prewarm-presets";
+import { getLiveSession } from "@/lib/auth/liveSession";
+import { searchOwnershipFor } from "@/lib/searchScope";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -86,6 +88,13 @@ type MatcherResponse = {
 };
 
 export async function POST(req: Request) {
+  // 归属从会话取, 绝不接受客户端传的 userId/shopId
+  const session = await getLiveSession();
+  if (!session) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  const ownership = searchOwnershipFor(session);
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -213,6 +222,7 @@ export async function POST(req: Request) {
 
   const matchSearch = await prisma.matchSearch.create({
     data: {
+      ...ownership,
       partLineId: partLine.id,
       queryVehicleYear: ro.vehicleYear,
       queryVehicleMake: ro.vehicleMake,

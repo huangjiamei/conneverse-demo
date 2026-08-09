@@ -1,5 +1,5 @@
 /**
- * /search/history — 全局搜索历史。列按角色分两套。
+ * /search/history — 搜索历史。可见范围和列都按角色分。
  *
  *   PLATFORM_ADMIN → Part / Vehicle · Verified · Top pick (Balanced) · Cheapest · Fastest · 删除
  *   其余角色        → Part / Vehicle · Cheapest · Fastest · 删除
@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import HistoryListClient, { type HistoryRow } from "./HistoryListClient";
 import { requireLiveSession } from "@/lib/auth/liveSession";
 import { loadPresetPicks } from "@/lib/historyPicks";
+import { searchVisibilityWhere } from "@/lib/searchScope";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +32,10 @@ export default async function SearchHistoryPage() {
   const session = await requireLiveSession();
   const isPlatformAdmin = session.role === "PLATFORM_ADMIN";
 
-  // 1) 全局搜索, 倒序
+  // 1) 可见范围内的搜索, 倒序。范围规则见 lib/searchScope:
+  //    平台管理员看全部 / 店铺管理员看本店所有人 / 员工只看自己。
   const searches = await prisma.matchSearch.findMany({
+    where: searchVisibilityWhere(session),
     orderBy: { createdAt: "desc" },
     take: 200,
     select: {

@@ -280,7 +280,7 @@ export default function SearchClient({
             {searching ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
-                Searching eBay…
+                Searching Conneverse…
               </>
             ) : (
               <>

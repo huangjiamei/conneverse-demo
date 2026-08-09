@@ -18,6 +18,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computePickInPresets } from "@/lib/prewarm-presets";
 import { VALID_PRESET_SET, VALID_PRESETS } from "@/lib/presets";
+import { getLiveSession } from "@/lib/auth/liveSession";
+import { searchVisibilityWhere } from "@/lib/searchScope";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -72,6 +74,12 @@ type RerankResult = {
 };
 
 export async function POST(req: Request) {
+  // 这个接口既读完整候选、又写 optimizer 列, 所以同样要按可见范围收口
+  const session = await getLiveSession();
+  if (!session) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -94,14 +102,15 @@ export async function POST(req: Request) {
   }
 
   // 拿 MatchSearch + candidates (含现有 optimizer 5 列, 稍后会更新)
-  const matchSearch = await prisma.matchSearch.findUnique({
-    where: { id: matchSearchId },
+  const matchSearch = await prisma.matchSearch.findFirst({
+    where: { id: matchSearchId, ...searchVisibilityWhere(session) },
     include: {
       candidates: { orderBy: { rank: "asc" } },
       partLine: true,
     },
   });
 
+  // 不存在和不在可见范围内给同一个回复, 不泄露别人的搜索是否存在
   if (!matchSearch) {
     return NextResponse.json(
       { error: `MatchSearch not found: ${matchSearchId}` },
