@@ -62,6 +62,7 @@ model Shop {
   adminUser     User?   @relation("ShopAdmin", fields: [adminUserId], references: [id])
   members       User[]  @relation("ShopMembers")
   adminRequests ShopAdminRequest[]
+  searches MatchSearch[]
 
   @@index([zip])                          // 按 zip 查/算配送时会用到
 }
@@ -100,6 +101,8 @@ model User {
 
   adminOf  Shop?              @relation("ShopAdmin")    // 反向:该 user 是哪个店的管理员(≤1)
   requests ShopAdminRequest[] @relation("RequestByUser")
+
+  searches MatchSearch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -253,6 +256,13 @@ model MatchSearch {
   candidates       Candidate[]
   optimizerResults OptimizerResult[]
 
+  userId String?
+  user   User?  @relation(fields: [userId], references: [id])
+  shopId String?
+  shop   Shop?  @relation(fields: [shopId], references: [id])
+
+  @@index([userId])
+  @@index([shopId])
   @@index([partLineId, createdAt])
 }
 
