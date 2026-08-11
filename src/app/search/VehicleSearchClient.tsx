@@ -13,8 +13,17 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, Search, Car, ChevronDown, Clock } from "lucide-react";
+import {
+  Loader2,
+  Search,
+  Car,
+  ChevronDown,
+  Clock,
+  ScanLine,
+  AlertTriangle,
+} from "lucide-react";
 import Link from "next/link";
+import { normalizeVin, vinError, VIN_LENGTH } from "@/lib/vehicle/vin";
 import { type Candidate } from "@/components/CandidateCard";
 import { DEFAULT_PRESET } from "@/lib/presets";
 import { applyPositions } from "@/constants/positionWords";
@@ -51,6 +60,52 @@ function allSelectionFrom(list: SubModelOpt[]): SubModelSelection | null {
   const bvId = list[0]?.baseVehicleId;
   return bvId == null ? null : { kind: "all", baseVehicleId: bvId };
 }
+
+// /api/vehicles/decode-vin 的返回。三种 status 都是 200 —— 对不上是正常剧情。
+type VinDecoded = {
+  modelYear: number | null;
+  make: string | null;
+  model: string | null;
+  series: string | null;
+  trim: string | null;
+  bodyClass: string | null;
+  clean: boolean;
+  errorText: string | null;
+};
+type VinPrefill = { year: number | null; makeId: number | null; makeName: string | null };
+type VinDecodeResponse =
+  | {
+      status: "resolved";
+      vin: string;
+      decoded: VinDecoded;
+      confidence: "exact" | "fuzzy";
+      vehicle: {
+        year: number;
+        makeId: number;
+        makeName: string;
+        modelId: number;
+        modelName: string;
+        baseVehicleId: number;
+      };
+    }
+  | {
+      status: "ambiguous";
+      vin: string;
+      decoded: VinDecoded;
+      reason: string;
+      prefill: VinPrefill;
+      candidates: NamedOpt[];
+    }
+  | {
+      status: "unmatched";
+      vin: string;
+      decoded: VinDecoded;
+      reason: string;
+      prefill: VinPrefill;
+    };
+
+// 车辆选择器的两个互斥入口。一次只渲染一个面板。
+type VehicleTab = "manual" | "vin";
 
 type CategoryOpt = { id: number; name: string };
 type SubCategoryOpt = { subCategoryId: number; subCategoryName: string };
@@ -91,6 +146,18 @@ export default function VehicleSearchClient({
   const [makeId, setMakeId] = useState<number | null>(null);
   const [modelId, setModelId] = useState<number | null>(null);
   const [subSelection, setSubSelection] = useState<SubModelSelection | null>(null);
+
+  // 车辆选择器: 两个互斥 tab (下拉 / VIN), 默认下拉
+  const [vehicleTab, setVehicleTab] = useState<VehicleTab>("manual");
+
+  // VIN 入口 (可选; 手动选择器不依赖它)
+  const [vin, setVin] = useState("");
+  const [vinMsg, setVinMsg] = useState<string | null>(null); // 格式错误 / 请求失败
+  const [vinDecoding, setVinDecoding] = useState(false);
+  // 年份+品牌都没解出来 → 留在 VIN tab 的那一行失败提示
+  const [vinFailure, setVinFailure] = useState<string | null>(null);
+  // 解出来了但 NHTSA 标了问题 (最常见是校验位) —— 一行, 跟着预填的表单走
+  const [vinCaution, setVinCaution] = useState<string | null>(null);
 
   // 各层 loading
   const [loadingYears, setLoadingYears] = useState(false);
@@ -291,8 +358,15 @@ export default function VehicleSearchClient({
       ? scopeCat.name
       : "All categories";
 
+  // 用户一动下拉, VIN 那边的提示就过期了
+  function clearVinFeedback() {
+    setVinFailure(null);
+    setVinCaution(null);
+  }
+
   function selectYear(newYear: number | null) {
     setYear(newYear);
+    clearVinFeedback();
     // 清空下游
     setMakeId(null);
     setModelId(null);
@@ -312,6 +386,7 @@ export default function VehicleSearchClient({
 
   function selectMake(newMakeId: number | null) {
     setMakeId(newMakeId);
+    clearVinFeedback();
     setModelId(null);
     setSubSelection(null);
     setModels([]);
@@ -328,6 +403,7 @@ export default function VehicleSearchClient({
 
   function selectModel(newModelId: number | null) {
     setModelId(newModelId);
+    clearVinFeedback(); // 车型一旦选定, VIN 的「挑一个车型」提示就完成使命了
     setSubSelection(null);
     setSubmodels([]);
     if (newModelId == null || year == null || makeId == null) return;
@@ -363,6 +439,39 @@ export default function VehicleSearchClient({
       ? `${year} ${makeName} ${modelName} (${subModelLabel})`
       : "Select vehicle";
 
+  /**
+   * 按 id 依次加载各层列表并选中 —— Popular vehicles 和 VIN 解码共用。
+   * 下拉要显示名字就得先有对应的 option, 所以只能串行, 一层一层来。
+   * mId / mdId 传 null = 这一层没解析出来, 加载完上一层列表就停在那儿,
+   * 用户接着手选 (VIN 对不上时的回退路径)。
+   */
+  async function applyVehicleIds(y: number, mId: number | null, mdId: number | null) {
+    setYear(y);
+    setMakeId(null);
+    setModelId(null);
+    setSubSelection(null);
+    setModels([]);
+    setSubmodels([]);
+
+    const makesData = await getJson<NamedOpt[]>(`/api/vehicles/makes?year=${y}`);
+    setMakes(makesData);
+    if (mId == null) return;
+    setMakeId(mId);
+
+    const modelsData = await getJson<NamedOpt[]>(
+      `/api/vehicles/models?year=${y}&makeId=${mId}`
+    );
+    setModels(modelsData);
+    if (mdId == null) return;
+    setModelId(mdId);
+
+    const subsData = await getJson<SubModelOpt[]>(
+      `/api/vehicles/submodels?year=${y}&makeId=${mId}&modelId=${mdId}`
+    );
+    setSubmodels(subsData);
+    setSubSelection(allSelectionFrom(subsData)); // 默认 All
+  }
+
   // 点 Popular vehicle: 反查 id → 依次加载并选中 year/make/model, 载入 submodel
   // 列表并默认 All (用户可再手动挑 trim)。popover 保持打开。
   async function applyPopular(p: {
@@ -373,38 +482,111 @@ export default function VehicleSearchClient({
     const key = `${p.year} ${p.makeName} ${p.modelName}`;
     setApplyingPopular(key);
     setError(null);
+    clearVinFeedback();
     try {
-      const resolved = await fetch(
+      const { makeId: mId, modelId: mdId } = await getJson<{
+        makeId: number;
+        modelId: number;
+      }>(
         `/api/vehicles/resolve?year=${p.year}&make=${encodeURIComponent(
           p.makeName
         )}&model=${encodeURIComponent(p.modelName)}`
       );
-      if (!resolved.ok) throw new Error("resolve failed");
-      const { makeId: mId, modelId: mdId } = await resolved.json();
-
-      // 依次加载列表 + 选中 (下拉需要列表里有对应 option 才能显示名字)
-      setYear(p.year);
-      setSubSelection(null);
-      const makesData: NamedOpt[] = await fetch(
-        `/api/vehicles/makes?year=${p.year}`
-      ).then((r) => r.json());
-      setMakes(makesData);
-      setMakeId(mId);
-      const modelsData: NamedOpt[] = await fetch(
-        `/api/vehicles/models?year=${p.year}&makeId=${mId}`
-      ).then((r) => r.json());
-      setModels(modelsData);
-      setModelId(mdId);
-      const subsData: SubModelOpt[] = await fetch(
-        `/api/vehicles/submodels?year=${p.year}&makeId=${mId}&modelId=${mdId}`
-      ).then((r) => r.json());
-      setSubmodels(subsData);
-      setSubSelection(allSelectionFrom(subsData)); // 默认 All
+      await applyVehicleIds(p.year, mId, mdId);
     } catch {
       setError(`Couldn't load ${key}`);
     } finally {
       setApplyingPopular(null);
     }
+  }
+
+  // ---- VIN 解码 ----------------------------------------------------------
+
+  // 打字途中不催长度 (会一直红着), 只在出现非法字符或已凑满 17 位时提示。
+  function onVinChange(raw: string) {
+    const cleaned = normalizeVin(raw).slice(0, VIN_LENGTH);
+    setVin(cleaned);
+    clearVinFeedback();
+    const hasIllegalChar = /[^A-HJ-NPR-Z0-9]/.test(cleaned);
+    setVinMsg(
+      cleaned.length > 0 && (hasIllegalChar || cleaned.length === VIN_LENGTH)
+        ? vinError(cleaned)
+        : null
+    );
+  }
+
+  async function decodeVinInput() {
+    const cleaned = normalizeVin(vin);
+    setVin(cleaned);
+    clearVinFeedback();
+
+    // 格式不对就地拦下, 不打后端
+    const formatErr = vinError(cleaned);
+    if (formatErr) {
+      setVinMsg(formatErr);
+      return;
+    }
+    setVinMsg(null);
+    setVinDecoding(true);
+    // 只拿 VIN 去解, 不把 Year/Make/Model tab 的年份当 hint 传过去。
+    // 两个 tab 是互斥入口, 而且解码成功后就切到那个 tab, 年份必然是填着的 ——
+    // 再解下一条 VIN 时那个陈年年份会被带上, vPIC 一旦对不上 10 位年份码就
+    // 直接返回 model: null (整车退化成 year+make)。宁可少一点年份提示:
+    // vPIC 猜错年份的话, 预填表单里的 Year 下拉改一下就行。
+    try {
+      const res = await fetch(`/api/vehicles/decode-vin?vin=${cleaned}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setVinMsg(
+          (data?.error as string) ??
+            `VIN lookup failed (HTTP ${res.status}). Re-enter it, or switch to Year / Make to pick manually.`
+        );
+        return;
+      }
+      await applyVinResult(data as VinDecodeResponse);
+    } catch {
+      setVinMsg(
+        "Couldn't reach the VIN decoder. Re-enter it, or switch to Year / Make to pick manually."
+      );
+    } finally {
+      setVinDecoding(false);
+    }
+  }
+
+  /**
+   * VIN 解码没有自己的结果卡片 —— 解出来的值直接灌进 Year/Make/Model 那张表单,
+   * 填好的下拉本身就是确认, 用户接着改哪层都行, 照常 Done。
+   *
+   * 年份+品牌都拿到 → 切到 Year/Make/Model tab 并预填 (Model 没唯一命中就留空,
+   * 同一张表单接手)。连年份+品牌都没有 → 表单没什么可填的, 留在 VIN tab 给一行。
+   */
+  async function applyVinResult(data: VinDecodeResponse) {
+    // NHTSA 自己都标了问题 (最常见是校验位对不上) —— 不拦, 但要让用户知道
+    const checkDigitNote = data.decoded.clean
+      ? null
+      : `${stripErrorCode(data.decoded.errorText)} Please double-check the VIN.`;
+
+    if (data.status === "resolved") {
+      const v = data.vehicle;
+      await applyVehicleIds(v.year, v.makeId, v.modelId); // sub-model 静默停在 All
+      setVinCaution(checkDigitNote);
+      setVehicleTab("manual");
+      return;
+    }
+
+    // 年份+品牌对上了 (ambiguous 必然如此) → Model 空着让用户在已收窄的列表里点
+    if (data.prefill.year != null && data.prefill.makeId != null) {
+      await applyVehicleIds(data.prefill.year, data.prefill.makeId, null);
+      setVinCaution(checkDigitNote);
+      setVehicleTab("manual");
+      return;
+    }
+
+    // 解不出车 —— 不猜, 不预填任何一层
+    setVinFailure(
+      checkDigitNote ??
+        `${decodeFailureReason(data)} Re-enter it, or switch to Year / Make to pick manually.`
+    );
   }
 
   function clearVehicle() {
@@ -415,6 +597,9 @@ export default function VehicleSearchClient({
     setMakes([]);
     setModels([]);
     setSubmodels([]);
+    setVin("");
+    setVinMsg(null);
+    clearVinFeedback();
   }
 
   async function handleSearch() {
@@ -549,106 +734,215 @@ export default function VehicleSearchClient({
                     </button>
                   </div>
 
-                  {/* Popular vehicles */}
-                  <div className="mt-4">
-                    <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
-                      Popular vehicles
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {POPULAR.map((p) => {
-                        const key = `${p.year} ${p.makeName} ${p.modelName}`;
-                        const loading = applyingPopular === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => applyPopular(p)}
-                            disabled={applyingPopular != null}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-[13px] text-gray-600 hover:border-gray-300 disabled:opacity-60 transition"
-                          >
-                            {loading && (
-                              <Loader2 size={12} className="animate-spin" />
-                            )}
-                            {key}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  {/* 两个互斥入口: 一次只渲染一个面板 */}
+                  <div
+                    role="tablist"
+                    aria-label="Vehicle entry method"
+                    className="mt-4 flex gap-0.5 rounded-lg border border-gray-300 bg-gray-100 p-0.5"
+                  >
+                    {(
+                      [
+                        ["manual", "Year / Make / Model"],
+                        ["vin", "VIN"],
+                      ] as const
+                    ).map(([tab, label]) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        role="tab"
+                        id={`vehicle-tab-${tab}`}
+                        aria-selected={vehicleTab === tab}
+                        aria-controls={`vehicle-panel-${tab}`}
+                        onClick={() => setVehicleTab(tab)}
+                        className={`flex-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition ${
+                          vehicleTab === tab
+                            ? "bg-white text-[#1A1A2E] shadow-sm"
+                            : "text-gray-600 hover:bg-white/50 hover:text-[#1A1A2E]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
 
-                  {/* 4 层级联下拉 */}
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <Dropdown
-                      label="Year"
-                      loading={loadingYears}
-                      disabled={loadingYears}
-                      value={year ?? ""}
-                      onChange={(v) => selectYear(v ? Number(v) : null)}
-                      placeholder="Select year"
-                      options={years.map((y) => ({ value: y.id, label: String(y.id) }))}
-                    />
-                    <Dropdown
-                      label="Make"
-                      loading={loadingMakes}
-                      disabled={year == null || loadingMakes}
-                      value={makeId ?? ""}
-                      onChange={(v) => selectMake(v ? Number(v) : null)}
-                      placeholder={year == null ? "Select year first" : "Select make"}
-                      options={makes.map((m) => ({ value: m.id, label: m.name }))}
-                    />
-                    <Dropdown
-                      label="Model"
-                      loading={loadingModels}
-                      disabled={makeId == null || loadingModels}
-                      value={modelId ?? ""}
-                      onChange={(v) => selectModel(v ? Number(v) : null)}
-                      placeholder={makeId == null ? "Select make first" : "Select model"}
-                      options={models.map((m) => ({ value: m.id, label: m.name }))}
-                    />
-                    <Dropdown
-                      label="Sub-model"
-                      loading={loadingSubmodels}
-                      disabled={modelId == null || loadingSubmodels}
-                      value={
-                        subSelection == null
-                          ? ""
-                          : subSelection.kind === "all"
-                            ? ALL_SUBMODELS
-                            : subSelection.opt.id
-                      }
-                      onChange={(v) => {
-                        if (!v) return setSubSelection(null);
-                        if (v === ALL_SUBMODELS) {
-                          return setSubSelection(allSelectionFrom(submodels));
+                  {/* Tab A: Year / Make / Model —— 快捷车型 + 四层级联下拉 */}
+                  <div
+                    role="tabpanel"
+                    id="vehicle-panel-manual"
+                    aria-labelledby="vehicle-tab-manual"
+                    hidden={vehicleTab !== "manual"}
+                  >
+                    {/* 预填的值来自一条 NHTSA 标了问题的 VIN —— 一行, 不拦 */}
+                    {vinCaution && (
+                      <p className="mt-4 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-px shrink-0 text-amber-600" />
+                        <span>{vinCaution}</span>
+                      </p>
+                    )}
+
+                    {/* Popular vehicles */}
+                    <div className="mt-4">
+                      <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+                        Popular vehicles
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {POPULAR.map((p) => {
+                          const key = `${p.year} ${p.makeName} ${p.modelName}`;
+                          const loading = applyingPopular === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => applyPopular(p)}
+                              disabled={applyingPopular != null}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-[13px] text-gray-600 hover:border-gray-300 disabled:opacity-60 transition"
+                            >
+                              {loading && (
+                                <Loader2 size={12} className="animate-spin" />
+                              )}
+                              {key}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 4 层级联下拉 */}
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <Dropdown
+                        label="Year"
+                        loading={loadingYears}
+                        disabled={loadingYears}
+                        value={year ?? ""}
+                        onChange={(v) => selectYear(v ? Number(v) : null)}
+                        placeholder="Select year"
+                        options={years.map((y) => ({ value: y.id, label: String(y.id) }))}
+                      />
+                      <Dropdown
+                        label="Make"
+                        loading={loadingMakes}
+                        disabled={year == null || loadingMakes}
+                        value={makeId ?? ""}
+                        onChange={(v) => selectMake(v ? Number(v) : null)}
+                        placeholder={year == null ? "Select year first" : "Select make"}
+                        options={makes.map((m) => ({ value: m.id, label: m.name }))}
+                      />
+                      <Dropdown
+                        label="Model"
+                        loading={loadingModels}
+                        disabled={makeId == null || loadingModels}
+                        value={modelId ?? ""}
+                        onChange={(v) => selectModel(v ? Number(v) : null)}
+                        placeholder={makeId == null ? "Select make first" : "Select model"}
+                        options={models.map((m) => ({ value: m.id, label: m.name }))}
+                      />
+                      <Dropdown
+                        label="Sub-model"
+                        loading={loadingSubmodels}
+                        disabled={modelId == null || loadingSubmodels}
+                        value={
+                          subSelection == null
+                            ? ""
+                            : subSelection.kind === "all"
+                              ? ALL_SUBMODELS
+                              : subSelection.opt.id
                         }
-                        const opt = submodels.find((s) => s.id === Number(v));
-                        setSubSelection(opt ? { kind: "one", opt } : null);
-                      }}
-                      placeholder={
-                        modelId == null ? "Select model first" : "Select sub-model"
-                      }
-                      // 列表加载后默认就是 All, 空占位项不再是有意义的状态,
-                      // 留着只会让用户误选进「没选车」而 Search 被禁用
-                      hidePlaceholder={submodels.length > 0}
-                      options={[
-                        ...(submodels.length > 0
-                          ? [{ value: ALL_SUBMODELS, label: "All (any submodel)" }]
-                          : []),
-                        ...submodels.map((s) => ({ value: s.id, label: s.name })),
-                      ]}
-                    />
+                        onChange={(v) => {
+                          if (!v) return setSubSelection(null);
+                          if (v === ALL_SUBMODELS) {
+                            return setSubSelection(allSelectionFrom(submodels));
+                          }
+                          const opt = submodels.find((s) => s.id === Number(v));
+                          setSubSelection(opt ? { kind: "one", opt } : null);
+                        }}
+                        placeholder={
+                          modelId == null ? "Select model first" : "Select sub-model"
+                        }
+                        // 列表加载后默认就是 All, 空占位项不再是有意义的状态,
+                        // 留着只会让用户误选进「没选车」而 Search 被禁用
+                        hidePlaceholder={submodels.length > 0}
+                        options={[
+                          ...(submodels.length > 0
+                            ? [{ value: ALL_SUBMODELS, label: "All (any submodel)" }]
+                            : []),
+                          ...submodels.map((s) => ({ value: s.id, label: s.name })),
+                        ]}
+                      />
+                    </div>
+
+                    {/* Done */}
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setPopoverOpen(false)}
+                        disabled={!vehicleSelected}
+                        className="px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Done */}
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setPopoverOpen(false)}
-                      disabled={!vehicleSelected}
-                      className="px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  {/* Tab B: VIN —— 输入 + Decode, 命中就地确认, 没命中掉回 Tab A */}
+                  <div
+                    role="tabpanel"
+                    id="vehicle-panel-vin"
+                    aria-labelledby="vehicle-tab-vin"
+                    hidden={vehicleTab !== "vin"}
+                    className="mt-4"
+                  >
+                    <label
+                      htmlFor="vin-input"
+                      className="flex items-center gap-1.5 text-[11px] text-gray-500 uppercase tracking-wide font-medium"
                     >
-                      Done
-                    </button>
+                      <ScanLine size={12} className="text-gray-400" />
+                      Decode VIN
+                    </label>
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        id="vin-input"
+                        value={vin}
+                        onChange={(e) => onVinChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (!vinDecoding) decodeVinInput();
+                          }
+                        }}
+                        spellCheck={false}
+                        autoComplete="off"
+                        placeholder="17-character VIN"
+                        aria-invalid={vinMsg != null}
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono tracking-wider uppercase focus:outline-none focus:border-[#00B4A6] focus:ring-1 focus:ring-[#00B4A6]/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={decodeVinInput}
+                        disabled={vinDecoding || vin.length === 0}
+                        className="inline-flex shrink-0 items-center gap-1.5 px-4 py-2 rounded-lg bg-[#00B4A6] text-white text-sm font-medium hover:bg-[#00A396] disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      >
+                        {vinDecoding && <Loader2 size={13} className="animate-spin" />}
+                        Decode
+                      </button>
+                    </div>
+                    <div className="mt-1.5 flex items-start justify-between gap-3">
+                      <div className="text-xs text-red-600">{vinMsg}</div>
+                      <div
+                        className={`shrink-0 text-[11px] tabular-nums ${
+                          vin.length === VIN_LENGTH ? "text-gray-400" : "text-gray-300"
+                        }`}
+                      >
+                        {vin.length}/{VIN_LENGTH}
+                      </div>
+                    </div>
+
+                    {/* 解不出车才有话说 —— 命中/半命中都直接切去那张填好的表单 */}
+                    {vinFailure && (
+                      <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-px shrink-0 text-amber-600" />
+                        <span>{vinFailure}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               </>
@@ -1016,6 +1310,54 @@ export default function VehicleSearchClient({
       )}
     </>
   );
+}
+
+// ============================================================
+// 小工具
+// ============================================================
+
+/** fetch + 非 2xx 抛错 (级联那几个列表接口都是纯数组, 拿不到就该报错而不是渲染空列表) */
+async function getJson<T>(url: string): Promise<T> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) as T;
+}
+
+/**
+ * vPIC 的 errorText 形如 "1 - Check Digit ... does not calculate properly; 7 - …",
+ * 可能串一长条。只留第一条并去掉前面的码, 一行放得下。
+ */
+function stripErrorCode(text: string | null): string {
+  const first = (text ?? "").split(";")[0] ?? "";
+  const t = first.replace(/^[\d,\s]*-\s*/, "").trim();
+  if (!t) return "This VIN didn't decode cleanly.";
+  const sentence = t.endsWith(".") ? t : `${t}.`;
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+/**
+ * 连年份+品牌都没解出来时的那半句 —— 说清为什么, 调用方再接上「怎么办」。
+ * 保持单句: VIN tab 上只给一行。
+ * (ambiguous 永远带着 year+makeId, 走不到这儿, 落 default 也无妨。)
+ */
+function decodeFailureReason(
+  data: Exclude<VinDecodeResponse, { status: "resolved" }>
+): string {
+  const d = data.decoded;
+  switch (data.reason) {
+    case "vpic_no_vehicle":
+      return "NHTSA doesn't recognize this VIN.";
+    case "year_missing":
+      return "This VIN didn't decode to a model year.";
+    case "year_not_in_vcdb":
+      return `${d.modelYear} isn't in the parts catalog.`;
+    case "make_missing":
+      return "This VIN didn't decode to a make.";
+    case "make_not_in_vcdb":
+      return `Decoded make “${d.make}” isn't in the parts catalog.`;
+    default:
+      return "Couldn't decode this VIN.";
+  }
 }
 
 // ============================================================
