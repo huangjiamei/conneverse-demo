@@ -36,6 +36,27 @@ enum ShopType {
   COLLISION    
 }
 
+enum Supplier {
+  EBAY
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PURCHASED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderCancelReason {
+  OUT_OF_STOCK
+  PRICE_CHANGED
+  SHOP_REQUESTED
+  OTHER
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  SHOP · REPAIR ORDER · PART LINE
 //  CCC 数据的落地形态。RepairOrder 一份对应一辆车 + 一组 PartLine。
@@ -63,6 +84,8 @@ model Shop {
   members       User[]  @relation("ShopMembers")
   adminRequests ShopAdminRequest[]
   searches MatchSearch[]
+
+  purchaseOrders PurchaseOrder[]
 
   @@index([zip])                          // 按 zip 查/算配送时会用到
 }
@@ -103,6 +126,8 @@ model User {
   requests ShopAdminRequest[] @relation("RequestByUser")
 
   searches MatchSearch[]
+
+  purchaseOrders PurchaseOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -307,25 +332,69 @@ model Candidate {
 // 用户下的采购单
 model PurchaseOrder {
   id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now())   // = 下单时间(placed)
   updatedAt DateTime @updatedAt
 
-  partLineId String
-  partLine   PartLine @relation(fields: [partLineId], references: [id])
+  // 归属:哪家店、谁下的
+  shopId          String
+  shop            Shop    @relation(fields: [shopId], references: [id])
+  orderedByUserId String?
+  orderedByUser   User?   @relation(fields: [orderedByUserId], references: [id])
 
-  candidateId String    @unique
-  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  // 可选挂到 RO 的 part line(独立搜索下单时为 null)
+  partLineId String?
+  partLine   PartLine? @relation(fields: [partLineId], references: [id])
 
-  // 下单时快照(卖家之后改价/下架不影响,会计意义上必须)
-  ebayItemId String
-  title      String
-  price      Decimal @db.Decimal(10, 2)
-  currency   String  @default("USD")
-  quantity   Int     @default(1)
+  // 选中的候选(offer),可空
+  candidateId String?    @unique
+  candidate   Candidate? @relation(fields: [candidateId], references: [id])
 
-  // 状态机(先简单,以后扩展)
-  status String @default("placed") // placed | ordered | delivered | cancelled
+  // 供应商无关的商品快照
+  supplier        Supplier @default(EBAY)
+  supplierName    String?                      // 具体供应商名(线下用,如 "Lindsay Honda")
+  supplierItemId  String?                      // 外部 id(线下可能没有)
+  supplierItemUrl String?
+  externalOrderId String?                      // 供应商真实下单确认号(采购后填)
+  title           String
+  imageUrl        String?
+  quantity        Int      @default(1)
+  currency        String   @default("USD")
 
+  // 金钱
+  quotedPrice           Decimal  @db.Decimal(10, 2)   // 店铺付你的价
+  actualCost            Decimal? @db.Decimal(10, 2)   // 你付供应商的(采购后填);差价 = quoted - actual
+  stripePaymentIntentId String?
+  amountPaid            Decimal? @db.Decimal(10, 2)
+  stripeRefundId        String?
+  refundedAmount        Decimal? @db.Decimal(10, 2)
+
+  // 收货快照(下单当时的店铺地址,不随 shop 之后被改而变)
+  shipToLine1 String?
+  shipToLine2 String?
+  shipToCity  String?
+  shipToState String?
+  shipToZip   String?
+  shipToPhone String?
+
+  // 物流
+  carrier        String?
+  trackingNumber String?
+  trackingUrl    String?
+
+  // 状态
+  status       OrderStatus        @default(PENDING_PAYMENT)
+  cancelReason OrderCancelReason?
+
+  // 各状态时间戳(流转时盖)
+  paidAt      DateTime?
+  purchasedAt DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  cancelledAt DateTime?
+  refundedAt  DateTime?
+
+  @@index([shopId, status])
+  @@index([status])               // 履约队列(查 PAID 待处理)
   @@index([partLineId])
 }
 
