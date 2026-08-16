@@ -23,6 +23,8 @@ import { prewarmOtherPresets, computePickInPresets } from "@/lib/prewarm-presets
 import { VALID_PRESET_SET, DEFAULT_PRESET } from "@/lib/presets";
 import { getLiveSession } from "@/lib/auth/liveSession";
 import { searchOwnershipFor } from "@/lib/searchScope";
+import { normalizeDeliveryZip } from "@/lib/orders/pricing";
+import { buildClientCandidate } from "@/lib/userResultsData";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -99,6 +101,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   const ownership = searchOwnershipFor(session);
+
+  // 收货 zip: 独立搜索的收货地 = 登录用户所属店铺。平台管理员没有店铺 →
+  // 不传, 走笼统运费 (他也不下单)。
+  const shopZip = session.shopId
+    ? (
+        await prisma.shop.findUnique({
+          where: { id: session.shopId },
+          select: { zip: true },
+        })
+      )?.zip ?? null
+    : null;
+  const deliveryZip = normalizeDeliveryZip(shopZip);
 
   let body: Body;
   try {
@@ -234,6 +248,8 @@ export async function POST(req: Request) {
         // eBay 类目路由 (块 3 前 matcher 忽略这两个字段, 无害)
         ebay_category_id: ebayCategoryId,
         ebay_fallback_category_ids: ebayFallbackCategoryIds,
+        // 收货 zip → eBay 按到店地址报真实运费/时效;没有就不传
+        delivery_zip: deliveryZip,
       }),
     });
   } catch (err) {
@@ -407,31 +423,19 @@ export async function POST(req: Request) {
       eligibleCount: optimizerResult?.meta?.total_eligible ?? 0,
       rejectedCount: optimizerResult?.meta?.total_rejected ?? 0,
     },
-    candidates: sorted.map((c) => ({
-      id: c.id, // ← DB Candidate.id, 与 switch-preset 返回的一致
-      rank: c.rank,
-      title: c.title,
-      price: String(c.price),
-      currency: c.currency,
-      itemUrl: c.itemUrl,
-      imageUrl: c.imageUrl,
-      condition: c.condition,
-      candidateLabel: c.candidateLabel,
-      labelSource: c.labelSource,
-      ebayItemId: c.ebayItemId,
-      optimizerRank: c.optimizerRank,
-      optimizerTotal: c.optimizerTotal,
-      optimizerPriceScore: c.optimizerPriceScore,
-      optimizerSpeedScore: c.optimizerSpeedScore,
-      optimizerQualityScore: c.optimizerQualityScore,
-      optimizerGateReason: c.optimizerGateReason,
-      brand: brandByItemId.get(c.ebayItemId) ?? null,
-      enrichedFields: enrichedByItemId.get(c.ebayItemId) ?? null,
-      compatibility: compatByItemId.get(c.ebayItemId) ?? null,
-      additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
-      partNumbers: partNumbersByItemId.get(c.ebayItemId) ?? [],
-      pickInPresets: pickMap.get(c.id) ?? [],
-    })),
+    // 统一走 buildClientCandidate —— 店铺角色拿不到 eBay 链接/item id/标价/卖家字段
+    candidates: sorted.map((c) =>
+      buildClientCandidate({
+        row: c, // ← DB Candidate, id 与 switch-preset 返回的一致
+        brand: brandByItemId.get(c.ebayItemId) ?? null,
+        enrichedFields: enrichedByItemId.get(c.ebayItemId) ?? null,
+        compatibility: compatByItemId.get(c.ebayItemId) ?? null,
+        additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
+        partNumbers: partNumbersByItemId.get(c.ebayItemId) ?? [],
+        pickInPresets: pickMap.get(c.id) ?? [],
+        isAdmin: session.role === "PLATFORM_ADMIN",
+      })
+    ),
     query: sourcePartInfo,
   });
 }

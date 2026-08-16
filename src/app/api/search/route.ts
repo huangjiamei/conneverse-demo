@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { prewarmOtherPresets, computePickInPresets } from "@/lib/prewarm-presets";
 import { getLiveSession } from "@/lib/auth/liveSession";
 import { searchOwnershipFor } from "@/lib/searchScope";
+import { normalizeDeliveryZip } from "@/lib/orders/pricing";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -112,7 +113,8 @@ export async function POST(req: Request) {
 
   const partLine = await prisma.partLine.findUnique({
     where: { id: partLineId },
-    include: { repairOrder: true },
+    // shop.zip 要跟着走: RO 流程的收货地就是这张 RO 所属店铺的地址
+    include: { repairOrder: { include: { shop: { select: { zip: true } } } } },
   });
 
   if (!partLine) {
@@ -147,6 +149,9 @@ export async function POST(req: Request) {
         source_part_info: sourcePartInfo,
         use_llm: useLlm,
         preset,                        // ← 把用户偏好传给 matcher
+        // 收货 zip → eBay 按到店地址报真实运费/时效。店铺没填 zip 就不传,
+        // matcher 退回笼统运费 (不报错)。
+        delivery_zip: normalizeDeliveryZip(ro.shop?.zip),
       }),
     });
   } catch (err) {

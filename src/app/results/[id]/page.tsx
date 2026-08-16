@@ -4,27 +4,19 @@
  * Same data as the admin detail page (/search/history/[id]) — reuses the stored
  * OptimizerResult rankings (Budget / Rush / Balanced), no new backend compute.
  * Renders the simplified ≤5 merged view (UserResults) instead of the full table.
+ *
+ * payload 组装、可见范围、按角色裁字段全在 lib/userResultsData —— 这页曾经自己
+ * 抄了一份几乎一样的组装代码,两份就是两个供应商泄露面,现在只留一份。
  */
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { type Candidate, type EnrichedFields } from "@/components/CandidateCard";
-import { selectUserResults } from "@/lib/userResults";
-import UserResults, { type UserHero } from "./UserResults";
+import UserResults from "./UserResults";
 import { requireLiveSession } from "@/lib/auth/liveSession";
-import { searchVisibilityWhere } from "@/lib/searchScope";
+import { loadUserResults } from "@/lib/userResultsData";
 
 export const dynamic = "force-dynamic";
-
-type RawCandidate = {
-  item_id?: string;
-  compatibility?: Record<string, unknown>;
-  optimizer_fields?: EnrichedFields;
-  additional_image_urls?: string[];
-  part_number_list?: string[];
-};
 
 export default async function ResultsPage({
   params,
@@ -37,122 +29,14 @@ export default async function ResultsPage({
 
   const { id } = await params;
 
-  // 可见范围校验 —— 列表过滤了不够, 直接开别人的 id 也要挡住
-  const search = await prisma.matchSearch.findFirst({
-    where: { id, ...searchVisibilityWhere(session) },
-    include: { candidates: { orderBy: { rank: "asc" } } },
-  });
-  if (!search) notFound();
+  // 可见范围校验在 loadUserResults 里 —— 列表过滤了不够, 直接开别人的 id 也要挡住
+  const payload = await loadUserResults(id, session);
+  if (!payload) notFound();
 
-  // 已存的三份排名 (prewarm 都算过) + 用于 pick 徽章的 rank1
-  const orRows = await prisma.optimizerResult.findMany({
-    where: { matchSearchId: id, preset: { in: ["Budget", "Rush", "Balanced"] } },
-    select: { candidateId: true, preset: true, rank: true },
-  });
-  const budgetRank = new Map<string, number | null>();
-  const rushRank = new Map<string, number | null>();
-  const balRank = new Map<string, number | null>();
-  const pickByCand = new Map<string, string[]>();
-  for (const r of orRows) {
-    const m =
-      r.preset === "Budget"
-        ? budgetRank
-        : r.preset === "Rush"
-          ? rushRank
-          : r.preset === "Balanced"
-            ? balRank
-            : null;
-    if (m) m.set(r.candidateId, r.rank);
-    if (r.rank === 1) {
-      const a = pickByCand.get(r.candidateId) ?? [];
-      a.push(r.preset);
-      pickByCand.set(r.candidateId, a);
-    }
-  }
-
-  // rawResponse lookup (enrichedFields / brand / compat / part numbers / images)
-  const rawByItemId = new Map<string, RawCandidate>();
-  if (search.rawResponse) {
-    const raw = search.rawResponse as { candidate_info_list?: RawCandidate[] };
-    for (const c of raw.candidate_info_list ?? []) {
-      if (c.item_id) rawByItemId.set(c.item_id, c);
-    }
-  }
-
-  const candMap = new Map<string, Candidate>();
-  for (const c of search.candidates) {
-    const raw = rawByItemId.get(c.ebayItemId);
-    const compat = raw?.compatibility || {};
-    const brand = (compat.Brand as string) || (compat.Make as string) || null;
-    candMap.set(c.id, {
-      id: c.id,
-      rank: c.rank,
-      title: c.title,
-      price: String(c.price),
-      currency: c.currency,
-      itemUrl: c.itemUrl,
-      imageUrl: c.imageUrl,
-      condition: c.condition,
-      candidateLabel: c.candidateLabel,
-      labelSource: c.labelSource,
-      ebayItemId: c.ebayItemId,
-      optimizerRank: c.optimizerRank,
-      optimizerTotal: c.optimizerTotal,
-      optimizerPriceScore: c.optimizerPriceScore,
-      optimizerSpeedScore: c.optimizerSpeedScore,
-      optimizerQualityScore: c.optimizerQualityScore,
-      optimizerGateReason: c.optimizerGateReason,
-      brand,
-      enrichedFields: raw?.optimizer_fields ?? null,
-      compatibility: (raw?.compatibility as Record<string, unknown>) ?? null,
-      additionalImageUrls: raw?.additional_image_urls ?? [],
-      partNumbers: raw?.part_number_list ?? [],
-      pickInPresets: pickByCand.get(c.id) ?? [],
-    });
-  }
-
-  const verifiedIds = search.candidates
-    .filter((c) => c.candidateLabel === 1)
-    .map((c) => c.id);
-
-  const { heroes: heroSel, alternateIds } = selectUserResults({
-    verifiedIds,
-    budgetRankByCand: budgetRank,
-    rushRankByCand: rushRank,
-    balancedRankByCand: balRank,
-  });
-
-  const heroes: UserHero[] = heroSel
-    .map((h) => {
-      const candidate = candMap.get(h.id);
-      return candidate ? { candidate, badge: h.badge } : null;
-    })
-    .filter((h): h is UserHero => h != null);
-  const alternates = alternateIds
-    .map((aid) => candMap.get(aid))
-    .filter((c): c is Candidate => c != null);
-
-  // 类目名
-  let category: string | null = null;
-  if (search.queryPcdbCategoryId != null) {
-    const cat = await prisma.pcdbCategory.findUnique({
-      where: { id: search.queryPcdbCategoryId },
-      select: { name: true },
-    });
-    category = cat?.name ?? null;
-  }
-
-  const context = {
-    part: search.queryPartDescription,
-    vehicle: `${search.queryVehicleYear} ${search.queryVehicleMake} ${search.queryVehicleModel}${
-      search.queryVehicleSubModel ? ` ${search.queryVehicleSubModel}` : ""
-    }`,
-    category,
-  };
-
+  const { context, ordering, heroes, alternates } = payload;
   const hasResults = heroes.length > 0;
 
-  const when = search.createdAt.toLocaleString("en-US", {
+  const when = new Date(context.createdAt).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -185,13 +69,11 @@ export default async function ResultsPage({
       {/* 搜索快照头 (同 admin) */}
       <div className="mt-4 bg-[#1A1A2E] text-white rounded-xl p-6">
         <div className="text-xs text-white/50 tracking-wide">Searched for</div>
-        <div className="mt-1 text-xl font-semibold">
-          {search.queryPartDescription}
-        </div>
+        <div className="mt-1 text-xl font-semibold">{context.part}</div>
         <div className="mt-1 text-sm text-white/70">
           {context.vehicle}
-          {search.queryPartNumber ? ` · PN ${search.queryPartNumber}` : ""}
-          {category ? ` · ${category}` : ""}
+          {context.partNumber ? ` · PN ${context.partNumber}` : ""}
+          {context.category ? ` · ${context.category}` : ""}
         </div>
         <div className="mt-2 text-xs text-white/40">{when}</div>
       </div>
@@ -201,6 +83,7 @@ export default async function ResultsPage({
         {hasResults ? (
           <UserResults
             context={context}
+            ordering={ordering}
             heroes={heroes}
             alternates={alternates}
           />

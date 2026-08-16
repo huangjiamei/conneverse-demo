@@ -14,7 +14,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, LayoutGrid, Search, Store } from "lucide-react";
+import { ClipboardList, LayoutGrid, Package, Search, Store } from "lucide-react";
 import type { Role } from "@/lib/auth/types";
 
 const linkClass =
@@ -85,6 +85,14 @@ export function HeaderNav({
         <Link href="/search" className={linkClass}>
           <Search size={15} />
           Search
+        </Link>
+      )}
+      {/* 订单入口两个门店角色都给 —— 可见范围在 /orders 里按角色收窄
+          (店铺管理员看本店, 员工只看自己),所以链接本身不必分角色 */}
+      {!pathname.startsWith("/orders") && (
+        <Link href="/orders" className={linkClass}>
+          <Package size={15} />
+          Orders
         </Link>
       )}
     </>

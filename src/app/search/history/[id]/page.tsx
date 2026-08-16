@@ -15,6 +15,7 @@ import { CandidateTable } from "../../CandidateTable";
 import { computePickInPresets } from "@/lib/prewarm-presets";
 import { requireLivePlatformAdmin } from "@/lib/auth/liveSession";
 import { searchVisibilityWhere } from "@/lib/searchScope";
+import { priceCandidate } from "@/lib/orders/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -81,10 +82,19 @@ export default async function HistoryDetailPage({
     const brand =
       (compat.Brand as string) || (compat.Make as string) || null;
     const b = balByCand.get(c.id);
+    // 全包价 —— 这页只给平台管理员, 所以内部字段照发
+    const pricing = priceCandidate(
+      Number(c.price),
+      raw?.optimizer_fields?.shipping_cost
+    );
     return {
       id: c.id,
       rank: c.rank,
       title: c.title,
+      quotedPrice:
+        pricing.quotedPrice == null ? null : pricing.quotedPrice.toFixed(2),
+      quoteBlockedReason: pricing.quoteBlockedReason,
+      landed: pricing.landed == null ? null : pricing.landed.toFixed(2),
       price: String(c.price),
       currency: c.currency,
       itemUrl: c.itemUrl,

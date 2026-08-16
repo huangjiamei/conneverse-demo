@@ -13,20 +13,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Store, Users } from "lucide-react";
+import { ArrowUpRight, Package, Store, Users } from "lucide-react";
 
 export function AdminNav({
   pendingUsers,
   pendingRequests,
+  paidOrders,
 }: {
   pendingUsers: number;
   pendingRequests: number;
+  /** 已付款待采购 —— 履约待办队列的长度 */
+  paidOrders: number;
 }) {
   const pathname = usePathname() ?? "";
 
   const tabs = [
     { href: "/admin/users", label: "Users", icon: Users, badge: pendingUsers },
     { href: "/admin/shops", label: "Shops", icon: Store, badge: pendingRequests },
+    { href: "/admin/orders", label: "Orders", icon: Package, badge: paidOrders },
   ];
 
   return (

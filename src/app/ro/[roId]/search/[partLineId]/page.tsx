@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { buildClientCandidate } from "@/lib/userResultsData";
 import SearchClient from "./SearchClient";
 import { DEFAULT_PRESET } from "@/lib/presets";
 import { requireLiveSession } from "@/lib/auth/liveSession";
@@ -130,34 +131,21 @@ export default async function SearchPage({
                 candidates: latestSearch.candidates.map((c) => {
                   const raw = rawByItemId.get(c.ebayItemId);
                   const compat = raw?.compatibility || {};
-                  const brand =
-                    (compat.Brand as string) || (compat.Make as string) || null;
-                  return {
-                    id: c.id,
-                    rank: c.rank,
-                    title: c.title,
-                    price: String(c.price),
-                    currency: c.currency,
-                    itemUrl: c.itemUrl,
-                    condition: c.condition,
-                    candidateLabel: c.candidateLabel,
-                    labelSource: c.labelSource,
-                    ebayItemId: c.ebayItemId,
-                    optimizerRank: c.optimizerRank,
-                    optimizerTotal: c.optimizerTotal,
-                    optimizerPriceScore: c.optimizerPriceScore,
-                    optimizerSpeedScore: c.optimizerSpeedScore,
-                    optimizerQualityScore: c.optimizerQualityScore,
-                    optimizerGateReason: c.optimizerGateReason,
-                    brand,
+                  // RO 流程只对平台管理员开放 (lib/auth/routes 的 PLATFORM_ONLY),
+                  // 所以内部字段照发
+                  return buildClientCandidate({
+                    row: c,
+                    brand:
+                      (compat.Brand as string) || (compat.Make as string) || null,
                     enrichedFields: raw?.optimizer_fields ?? null,
                     compatibility:
                       (raw?.compatibility as Record<string, unknown>) ?? null,
-                    imageUrl: c.imageUrl,
                     additionalImageUrls:
                       (raw as any)?.additional_image_urls ?? [],
                     partNumbers: (raw as any)?.part_number_list ?? [],
-                  };
+                    pickInPresets: [],
+                    isAdmin: true,
+                  });
                 }),
               }
             : null

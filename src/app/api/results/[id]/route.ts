@@ -9,7 +9,6 @@
 import { NextResponse } from "next/server";
 import { getLiveSession } from "@/lib/auth/liveSession";
 import { loadUserResults } from "@/lib/userResultsData";
-import { searchVisibilityWhere } from "@/lib/searchScope";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +22,9 @@ export async function GET(
   }
 
   const { id } = await params;
-  // 可见范围内才给 —— 否则员工换个 id 就能读到别人/别店的结果
-  const payload = await loadUserResults(id, searchVisibilityWhere(session));
+  // session 同时决定可见范围和字段裁剪 —— 员工换个 id 读不到别人的结果,
+  // 店铺角色也拿不到 eBay 链接/卖家字段 (见 lib/userResultsData)
+  const payload = await loadUserResults(id, session);
   if (!payload) {
     return NextResponse.json({ error: "Search not found." }, { status: 404 });
   }

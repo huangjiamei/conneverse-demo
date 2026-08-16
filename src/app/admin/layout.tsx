@@ -17,9 +17,11 @@ export default async function AdminLayout({
 }) {
   await requireLivePlatformAdmin();
 
-  const [pendingUsers, pendingRequests] = await Promise.all([
+  const [pendingUsers, pendingRequests, paidOrders] = await Promise.all([
     prisma.user.count({ where: { status: "PENDING" } }),
     prisma.shopAdminRequest.count({ where: { status: "PENDING" } }),
+    // PAID = 钱收了还没去采购, 正是履约待办
+    prisma.purchaseOrder.count({ where: { status: "PAID" } }),
   ]);
 
   return (
@@ -27,6 +29,7 @@ export default async function AdminLayout({
       <AdminNav
         pendingUsers={pendingUsers}
         pendingRequests={pendingRequests}
+        paidOrders={paidOrders}
       />
       {children}
     </>

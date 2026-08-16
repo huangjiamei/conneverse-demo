@@ -42,14 +42,25 @@ export type Candidate = {
   id: string;
   rank: number;
   title: string;
-  price: string;
   currency: string;
-  itemUrl: string;
+  /**
+   * 店铺付的全包单价 (landed × (1 + markup), 已到分)。
+   * null = 运费算不出 → 报不了价 → 不给即时下单 (见 quoteBlockedReason)。
+   */
+  quotedPrice: string | null;
+  quoteBlockedReason: string | null;
+  /**
+   * ↓ 以下四个是内部字段, 只在平台管理员的 payload 里有值。
+   * 店铺侧拿到的是 null —— 服务端就没下发, 不是前端不渲染 (见 lib/userResultsData)。
+   */
+  price: string | null;      // eBay 标价
+  landed?: string | null;    // price + shipping
+  itemUrl: string | null;    // eBay 商品链接
+  ebayItemId?: string | null;
   imageUrl: string | null;
   condition: string | null;
   candidateLabel: number | null;
   labelSource: string | null;
-  ebayItemId: string;
   optimizerRank: number | null;
   optimizerTotal: number | null;
   optimizerPriceScore: number | null;
@@ -70,6 +81,59 @@ export type Candidate = {
 // ============================================================
 // Helpers
 // ============================================================
+
+/**
+ * 指向供应商的链接 —— 只有平台管理员的 payload 带 itemUrl。
+ *
+ * 店铺侧服务端就没下发这个字段 (lib/userResultsData),所以这里 itemUrl 为 null
+ * 时整个链接消失,内容原样留下。把判断收在一个组件里,免得三处各写一遍 `&&`
+ * 而漏掉其中一处。
+ */
+function SupplierLink({
+  itemUrl,
+  className = "",
+  onClick,
+  children,
+}: {
+  itemUrl: string | null;
+  className?: string;
+  onClick?: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}) {
+  if (!itemUrl) return <span className={className}>{children}</span>;
+  return (
+    <a
+      href={itemUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+      onClick={onClick}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** "View on eBay" 那一小条 —— 店铺侧不下发 itemUrl, 于是整条不渲染 */
+function ViewOnSupplier({
+  itemUrl,
+  className = "",
+}: {
+  itemUrl: string | null;
+  className?: string;
+}) {
+  if (!itemUrl) return null;
+  return (
+    <a
+      href={itemUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+    >
+      View on eBay <ExternalLink size={10} />
+    </a>
+  );
+}
 
 // 实现在 lib/formatDelivery (无 "use client", 服务端也要用)。
 // 这里 re-export, 现有 `from "@/components/CandidateCard"` 的 import 照旧可用;
@@ -178,10 +242,9 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex-1 flex items-stretch justify-between gap-4">
           {candidate.imageUrl && (
-            <a
-              href={candidate.itemUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            /* itemUrl 只有平台管理员的 payload 里有 —— 没有就退成不可点的图 */
+            <SupplierLink
+              itemUrl={candidate.itemUrl}
               /* self-stretch + flex: 让 <a> 撑满行高,内部 img 的 h-full 才有参照 */
               className="flex-shrink-0 self-stretch flex"
               onClick={(e) => e.stopPropagation()}
@@ -193,7 +256,7 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
                 height={200}
                 className="w-[150px] h-full object-cover rounded border border-gray-100"
               />
-            </a>
+            </SupplierLink>
           )}
 
           <div className="min-w-0 flex-1 flex flex-col">
@@ -296,23 +359,26 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
 
             {/* 下: View on eBay / Score / More,置底 */}
             <div className="mt-2 flex items-center gap-3">
-              <a
-                href={candidate.itemUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <ViewOnSupplier
+                itemUrl={candidate.itemUrl}
                 className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-[#00B4A6] transition"
-              >
-                View on eBay <ExternalLink size={10} />
-              </a>
+              />
             </div>
           </div>
 
           {/* 右列: 价格置顶, More 置底 —— 与价格同一条右边线对齐 */}
           <div className="flex-shrink-0 flex flex-col items-end justify-between text-right">
             <div>
+              {/* 内部卡片: 主数字是店铺付的全包价, 副行是 eBay 标价 (只有平台
+                  管理员的 payload 有 price)。运费未知时报不出价 → 只剩标价。 */}
               <div className="text-lg font-semibold text-[#1A1A2E]">
-                ${candidate.price}
+                ${candidate.quotedPrice ?? candidate.price ?? "—"}
               </div>
+              {candidate.quotedPrice && candidate.price && (
+                <div className="text-[10px] text-gray-400 tabular-nums">
+                  item ${candidate.price}
+                </div>
+              )}
               <button
                 disabled
                 title="Ordering coming soon"
@@ -476,14 +542,10 @@ export function CandidateDetail({ candidate }: { candidate: Candidate }) {
           <div className="text-[13px] font-medium text-[#1A1A2E] leading-snug">
             {candidate.title}
           </div>
-          <a
-            href={candidate.itemUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <ViewOnSupplier
+            itemUrl={candidate.itemUrl}
             className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-gray-400 hover:text-[#00B4A6] transition whitespace-nowrap"
-          >
-            View on eBay <ExternalLink size={10} />
-          </a>
+          />
         </div>
 
         {compatEntries.length > 0 && (

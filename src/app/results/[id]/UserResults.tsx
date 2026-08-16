@@ -20,6 +20,7 @@ import {
   formatWarranty,
 } from "@/components/CandidateCard";
 import { PlaceOrderButton } from "@/components/PlaceOrderButton";
+import type { OrderingContext } from "@/lib/userResultsData";
 import type { HeroBadge } from "@/lib/userResults";
 
 export type UserHero = { candidate: Candidate; badge: HeroBadge };
@@ -56,44 +57,37 @@ function readableReturns(c: Candidate): string {
   return "—";
 }
 
-function parseShipping(c: Candidate): number | null {
-  const raw = c.enrichedFields?.shipping_cost;
-  if (raw == null || String(raw).trim() === "") return null;
-  const n = Number(raw);
-  return Number.isNaN(n) ? null : n;
-}
-
-// §4 (expanded card footer): landed main + subline.
+/**
+ * §4:显示价永远是服务端算好的 quotedPrice —— 店铺所见即所付。
+ *
+ * 这里以前自己拿 price + shipping 拼 landed。下单接口也要算一次同样的数,
+ * 两份实现迟早对不上,而这个数就是刷卡金额,不能靠"应该一样"。现在浏览器
+ * 不参与定价,只负责把服务端给的数字印出来。
+ *
+ * quotedPrice 为 null = 运费算不出 → 报不了全包价 → 不给即时下单 (B3)。
+ */
 function cardPrice(c: Candidate): {
   main: string;
   sub: { text: string; tone: "muted" | "amber" } | null;
 } {
-  const price = Number(c.price);
-  const ship = parseShipping(c);
-  if (ship == null)
-    return {
-      main: `$${price.toFixed(2)}`,
-      sub: { text: "+ shipping at checkout", tone: "amber" },
-    };
-  if (ship === 0) return { main: `$${price.toFixed(2)}`, sub: null }; // landed==price, no "Free shipping"
+  if (c.quotedPrice == null) {
+    return { main: "—", sub: { text: "Quote needed", tone: "amber" } };
+  }
   const ef = c.enrichedFields || {};
   const delivery = formatDeliveryRange(ef.delivery_min_date, ef.delivery_max_date);
   return {
-    main: `$${(price + ship).toFixed(2)}`,
+    main: `$${c.quotedPrice}`,
     sub: {
-      text: `incl. $${ship.toFixed(2)} shipping${delivery ? ` · ${delivery}` : ""}`,
+      text: `Delivered price${delivery ? ` · ${delivery}` : ""}`,
       tone: "muted",
     },
   };
 }
 
-// §4 (collapsed row): landed main; amber note only when shipping missing.
+/** §4 (collapsed row): 同上,报不了价时用琥珀色标出来 */
 function rowPrice(c: Candidate): { main: string; note: string | null } {
-  const price = Number(c.price);
-  const ship = parseShipping(c);
-  if (ship == null)
-    return { main: `$${price.toFixed(2)}`, note: "+ shipping at checkout" };
-  return { main: `$${(price + ship).toFixed(2)}`, note: null };
+  if (c.quotedPrice == null) return { main: "—", note: "Quote needed" };
+  return { main: `$${c.quotedPrice}`, note: null };
 }
 
 // ---- gallery (switch + zoom) --------------------------------
@@ -175,10 +169,16 @@ function ExpandedCard({
   candidate,
   badge,
   onZoom,
+  ordering,
+  partLineId,
+  defaultQuantity,
 }: {
   candidate: Candidate;
   badge?: HeroBadge;
   onZoom: (gallery: string[], index: number) => void;
+  ordering: OrderingContext;
+  partLineId: string | null;
+  defaultQuantity: number;
 }) {
   const px = cardPrice(candidate);
   const compat = candidate.compatibility
@@ -265,7 +265,17 @@ function ExpandedCard({
               </div>
             )}
           </div>
-          <PlaceOrderButton size="md" />
+          <PlaceOrderButton
+            size="md"
+            ordering={ordering}
+            target={{
+              candidateId: candidate.id,
+              quotedPrice: candidate.quotedPrice,
+              quoteBlockedReason: candidate.quoteBlockedReason,
+              partLineId,
+              defaultQuantity,
+            }}
+          />
         </div>
       </div>
     </div>
@@ -277,9 +287,15 @@ function ExpandedCard({
 function AlternateRow({
   candidate,
   onZoom,
+  ordering,
+  partLineId,
+  defaultQuantity,
 }: {
   candidate: Candidate;
   onZoom: (gallery: string[], index: number) => void;
+  ordering: OrderingContext;
+  partLineId: string | null;
+  defaultQuantity: number;
 }) {
   const [open, setOpen] = useState(false);
   const id = mainIdentifier(candidate);
@@ -317,7 +333,17 @@ function AlternateRow({
             </div>
           )}
         </div>
-        <PlaceOrderButton size="sm" />
+        <PlaceOrderButton
+          size="sm"
+          ordering={ordering}
+          target={{
+            candidateId: candidate.id,
+            quotedPrice: candidate.quotedPrice,
+            quoteBlockedReason: candidate.quoteBlockedReason,
+            partLineId,
+            defaultQuantity,
+          }}
+        />
         <ChevronDown
           size={16}
           className={`text-gray-400 shrink-0 transition ${open ? "rotate-180" : ""}`}
@@ -325,7 +351,13 @@ function AlternateRow({
       </div>
       {open && (
         <div className="mt-1.5">
-          <ExpandedCard candidate={candidate} onZoom={onZoom} />
+          <ExpandedCard
+            candidate={candidate}
+            onZoom={onZoom}
+            ordering={ordering}
+            partLineId={partLineId}
+            defaultQuantity={defaultQuantity}
+          />
         </div>
       )}
     </div>
@@ -535,12 +567,21 @@ export type UserResultsContext = {
 // 这里只负责把车辆/零件写进 quote context 供 PDF 用。
 export default function UserResults({
   context,
+  ordering,
   heroes,
   alternates,
+  partLineId = null,
+  defaultQuantity = 1,
 }: {
   context: UserResultsContext;
+  /** 下单前提 (角色 / 店铺地址) —— 服务端算好, 卡片只负责显示 */
+  ordering: OrderingContext;
   heroes: UserHero[];
   alternates: Candidate[];
+  /** 从 RO 行进来时挂上去, 独立搜索为 null */
+  partLineId?: string | null;
+  /** RO 行的数量作为默认值 */
+  defaultQuantity?: number;
 }) {
   // 整页共用一个 lightbox: 每次打开只重置 gallery + 起始 index
   const [lightbox, setLightbox] = useState<{
@@ -559,6 +600,9 @@ export default function UserResults({
             candidate={h.candidate}
             badge={h.badge}
             onZoom={openLightbox}
+            ordering={ordering}
+            partLineId={partLineId}
+            defaultQuantity={defaultQuantity}
           />
         ))}
       </div>
@@ -574,6 +618,9 @@ export default function UserResults({
                 key={a.id}
                 candidate={a}
                 onZoom={openLightbox}
+                ordering={ordering}
+                partLineId={partLineId}
+                defaultQuantity={defaultQuantity}
               />
             ))}
           </div>

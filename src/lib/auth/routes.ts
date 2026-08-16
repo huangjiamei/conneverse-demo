@@ -10,12 +10,19 @@ import type { Session } from "./types";
 /** 登录/注册/待审核 —— 未登录可访问 */
 const PUBLIC_PAGES = new Set(["/", "/register", "/pending"]);
 
-/** 公开 API (登录注册流程本身要用) */
+/**
+ * 公开 API (登录注册流程本身要用)。
+ *
+ * /api/stripe/webhook 是 Stripe 服务器打过来的 —— 它没有我们的会话 cookie,
+ * 不放行就会被这里 401 掉,订单永远停在 PENDING_PAYMENT。它的鉴权靠
+ * STRIPE_WEBHOOK_SECRET 验签, 不靠会话 (见该路由)。
+ */
 const PUBLIC_APIS = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
   "/api/shops",
+  "/api/stripe/webhook",
 ];
 
 export function isPublicPath(pathname: string): boolean {

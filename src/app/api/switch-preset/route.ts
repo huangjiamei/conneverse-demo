@@ -20,6 +20,7 @@ import { computePickInPresets } from "@/lib/prewarm-presets";
 import { VALID_PRESET_SET, VALID_PRESETS } from "@/lib/presets";
 import { getLiveSession } from "@/lib/auth/liveSession";
 import { searchVisibilityWhere } from "@/lib/searchScope";
+import { buildClientCandidate } from "@/lib/userResultsData";
 
 const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 
@@ -338,36 +339,21 @@ export async function POST(req: Request) {
       eligibleCount: sorted.filter((c) => c.optimizerRank != null).length,
       rejectedCount: sorted.filter((c) => c.optimizerGateReason != null).length,
     },
+    // 与搜索接口同一个下发点 —— 这条路由不在 PLATFORM_ONLY 名单里, 店铺角色
+    // 直接打也能进 (只要 matchSearchId 在自己范围内), 所以裁剪必须在这里生效
     candidates: sorted.map((c) => {
       const rawC = rawByItemId.get(c.ebayItemId);
       const compat = rawC?.compatibility || {};
-      const brand =
-        (compat.Brand as string) || (compat.Make as string) || null;
-      return {
-        id: c.id,
-        rank: c.rank,
-        title: c.title,
-        price: String(c.price),
-        currency: c.currency,
-        itemUrl: c.itemUrl,
-        imageUrl: c.imageUrl,
-        condition: c.condition,
-        candidateLabel: c.candidateLabel,
-        labelSource: c.labelSource,
-        ebayItemId: c.ebayItemId,
-        optimizerRank: c.optimizerRank,
-        optimizerTotal: c.optimizerTotal,
-        optimizerPriceScore: c.optimizerPriceScore,
-        optimizerSpeedScore: c.optimizerSpeedScore,
-        optimizerQualityScore: c.optimizerQualityScore,
-        optimizerGateReason: c.optimizerGateReason,
-        brand,
+      return buildClientCandidate({
+        row: c,
+        brand: (compat.Brand as string) || (compat.Make as string) || null,
         enrichedFields: rawC?.optimizer_fields ?? null,
         compatibility: (rawC?.compatibility as Record<string, unknown>) ?? null,
         additionalImageUrls: rawC?.additional_image_urls ?? [],
         partNumbers: rawC?.part_number_list ?? [],
         pickInPresets: pickMap.get(c.id) ?? [],
-      };
+        isAdmin: session.role === "PLATFORM_ADMIN",
+      });
     }),
   });
 }

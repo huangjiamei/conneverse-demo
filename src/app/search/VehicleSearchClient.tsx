@@ -1302,6 +1302,7 @@ export default function VehicleSearchClient({
           ) : (
             <UserResults
               context={userResults.context}
+              ordering={userResults.ordering}
               heroes={userResults.heroes}
               alternates={userResults.alternates}
             />

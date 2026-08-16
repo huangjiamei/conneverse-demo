@@ -309,7 +309,7 @@ model Candidate {
   candidateLabel Int? // matcher 打的标 (0 / 1 / null)
   labelSource    String? // 'EXACT_MPN_MATCH' / 'NGRAM_FITMENT_REJECT' 等
 
-  purchaseOrder    PurchaseOrder? // 如果用户挑了它下单
+  purchaseOrders   PurchaseOrder[] // 用户挑它下过的单 (退款/取消后可重下, 故非唯一)
   optimizerResults OptimizerResult[]
 
   optimizerRank         Int?
@@ -345,8 +345,11 @@ model PurchaseOrder {
   partLineId String?
   partLine   PartLine? @relation(fields: [partLineId], references: [id])
 
-  // 选中的候选(offer),可空
-  candidateId String?    @unique
+  // 选中的候选(offer),可空。
+  // 刻意不是 @unique: 同一个 candidate 走到终态 (DELIVERED/CANCELLED/REFUNDED)
+  // 之后允许重新下单 —— 涨价/断货退款后店铺往往就是要回来重下这一件。
+  // "同时只能有一张活跃单" 由下单接口查 ACTIVE_ORDER_STATUSES 保证。
+  candidateId String?
   candidate   Candidate? @relation(fields: [candidateId], references: [id])
 
   // 供应商无关的商品快照
@@ -396,6 +399,8 @@ model PurchaseOrder {
   @@index([shopId, status])
   @@index([status])               // 履约队列(查 PAID 待处理)
   @@index([partLineId])
+  @@index([candidateId])          // 下单前查"这个 candidate 有没有活跃单"
+  @@index([orderedByUserId])      // 员工只看自己的单
 }
 
 // 每个 candidate × 每个 preset 的 optimizer 结果缓存

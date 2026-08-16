@@ -20,7 +20,7 @@ import {
   parseSellerPct,
   humanizeGateReason,
 } from "@/components/CandidateCard";
-import { PlaceOrderButton } from "@/components/PlaceOrderButton";
+import { PlaceOrderPlaceholder } from "@/components/PlaceOrderButton";
 import {
   PRESET_META,
   PRESET_COLORS,
@@ -329,7 +329,7 @@ export function CandidateTable({
 
                   {/* 下单入口 —— 功能未做,统一禁用 */}
                   <td className="px-3 py-2">
-                    <PlaceOrderButton size="sm" />
+                    <PlaceOrderPlaceholder size="sm" />
                   </td>
 
                   {/* 展开箭头 */}

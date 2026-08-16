@@ -60,7 +60,8 @@ export default async function RoDetailPage({
     if (!po) continue;
 
     orderedLines++;
-    partsSpend += Number(po.price) * po.quantity;
+    // 店铺实际付的是全包价 quotedPrice (PurchaseOrder 上没有 price 这一列)
+    partsSpend += Number(po.quotedPrice) * po.quantity;
 
     // 假设: historicalPurchase.actualCost 是该行的总额 (CCC 会计口径,
     // 和 extendedSales 对应),所以不再乘 quantity。如果实际是单价,
