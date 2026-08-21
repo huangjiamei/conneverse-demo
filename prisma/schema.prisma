@@ -129,12 +129,28 @@ model User {
 
   purchaseOrders PurchaseOrder[]
 
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  emailVerificationTokens EmailVerificationToken[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([shopId])
   @@index([status])
   @@index([shopId, status])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique          // 只存哈希,不存明文
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // 申请成为店铺管理员(平台管理员审核)
