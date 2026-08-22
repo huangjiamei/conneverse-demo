@@ -14,20 +14,46 @@ import { issueEmailVerificationToken } from "@/lib/auth/emailVerification";
 import { sendEmail } from "./resend";
 import * as t from "./templates";
 
+/** trim + 丢空 + 按小写去重 —— Admin 表和兜底走同一套归一 */
+function normalizeRecipients(raw: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of raw) {
+    const e = r?.trim();
+    if (!e) continue;
+    const key = e.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
+}
+
 /**
- * 平台管理员收件人:优先 Admin 表里的真人邮箱,一个都没有时退到
- * ADMIN_NOTIFY_EMAIL。两者都空就只记日志。
+ * 平台管理员收件人 —— Admin 表里的每一个人。
+ *
+ * ADMIN_NOTIFY_EMAIL 只是「没有任何可用收件人」时的兜底 (刚建库、管理员被删光、
+ * 或者查库挂了),不是常规收件人:两边都发会让唯一那位管理员收到两封一样的信。
+ *
+ * 判「有没有可用收件人」用的是归一之后的结果,不是行数 —— 否则一行邮箱是空白的
+ * Admin 会让兜底不触发,结果谁都收不到。
+ *
+ * 去重按小写: Admin.email 的 unique 是大小写敏感的,`A@x.com` 和 `a@x.com`
+ * 能同时存在,不归一就会给同一个人发两封。
  */
 async function platformAdminRecipients(): Promise<string[]> {
+  let rows: string[] = [];
   try {
     const admins = await prisma.admin.findMany({ select: { email: true } });
-    const emails = admins.map((a) => a.email).filter(Boolean);
-    if (emails.length > 0) return emails;
+    rows = admins.map((a) => a.email);
   } catch (err) {
     console.error("[notify] could not read platform admins", err);
   }
-  const fallback = process.env.ADMIN_NOTIFY_EMAIL?.trim();
-  return fallback ? [fallback] : [];
+
+  const admins = normalizeRecipients(rows);
+  if (admins.length > 0) return admins;
+
+  return normalizeRecipients([process.env.ADMIN_NOTIFY_EMAIL]);
 }
 
 /** 该用户是否还有一条在审的「认领店铺管理员」申请 —— 决定邮件里的措辞 */
@@ -103,16 +129,18 @@ export async function notifyEmailVerified(userId: string): Promise<void> {
       reviewUrl: `${appUrl()}/admin/users?status=PENDING`,
     });
 
-    // 一封发不出去不该拖累另一封
+    if (admins.length === 0) {
+      console.error(
+        "[notify] no platform-admin recipient — add an Admin row or set ADMIN_NOTIFY_EMAIL"
+      );
+    }
+
+    // 管理员一人一封,不是一封塞多个收件人: 后者会让他们在 To 里互相看到
+    // 对方邮箱,而且 Resend 只回一个 id,某一位投递失败就分辨不出来。
+    // 全部并发,一封发不出去不拖累其它封。
     await Promise.all([
       sendEmail({ to: user.email, ...applicant }),
-      admins.length > 0
-        ? sendEmail({ to: admins, ...forAdmins })
-        : Promise.resolve(
-            console.error(
-              "[notify] no platform-admin recipient — set ADMIN_NOTIFY_EMAIL"
-            )
-          ),
+      ...admins.map((to) => sendEmail({ to, ...forAdmins })),
     ]);
   } catch (err) {
     console.error("[notify] notifyEmailVerified failed", err);
