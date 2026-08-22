@@ -26,7 +26,10 @@ export default async function AdminShopsPage() {
         select: {
           members: true,
           repairOrders: true,
-          adminRequests: { where: { status: "PENDING" } },
+          // 邮箱未验证的申请还不算待办 (§B) —— 别在列表上虚报一个红点
+          adminRequests: {
+            where: { status: "PENDING", user: { emailVerified: true } },
+          },
         },
       },
     },

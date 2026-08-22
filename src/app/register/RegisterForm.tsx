@@ -7,7 +7,8 @@
  * 时才显示"申请当本店管理员"勾选框。换成有管理员的店时,把已勾的状态清掉,
  * 免得残留一个用户看不见却会提交的 flag。
  *
- * 成功后不自动登录 (新账号是 PENDING),直接跳 /pending。
+ * 成功后不自动登录 (新账号是 PENDING 且 emailVerified=false),直接跳 /pending,
+ * 那边先提示去邮箱点验证链接 —— 邮箱验证通过后才算正式进入待审核。
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -109,9 +110,11 @@ export default function RegisterForm() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        router.replace(
-          `/pending?status=PENDING${data.claimFiled ? "&claim=1" : ""}`
-        );
+        // verify=1 让 /pending 先讲"去收验证邮件",那才是用户的下一步;
+        // email 带过去只为免得重发时再输一遍。
+        const q = new URLSearchParams({ status: "PENDING", verify: "1", email });
+        if (data.claimFiled) q.set("claim", "1");
+        router.replace(`/pending?${q.toString()}`);
         return;
       }
       if (data.fieldErrors) setFieldErrors(data.fieldErrors);
@@ -225,7 +228,7 @@ export default function RegisterForm() {
           <span className="text-[13px] leading-snug text-[#1A1A2E]">
             I&apos;m the manager of this shop — apply to be its admin
             <span className="block text-xs text-gray-500 mt-0.5">
-              This shop has no admin yet. Your request goes to the Conneverse
+              This shop has no admin yet. Your request goes to the PartHand
               platform team for review.
             </span>
           </span>

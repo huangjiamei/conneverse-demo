@@ -90,6 +90,33 @@ export function StatusBadge({ status }: { status: UserStatus }) {
   );
 }
 
+/**
+ * 邮箱未验证 —— 独立于 UserStatus 的一态 (§B 顺序)。
+ *
+ * 这类注册还没正式进入待审核队列: 列表里标出来,但不给 Approve/Reject 按钮,
+ * 因为后端也会拒绝批准 (EMAIL_UNVERIFIED)。等对方点了验证链接,平台管理员会
+ * 收到 adminNewRequest,那时它才变成一条真的待办。
+ */
+export function EmailUnverifiedBadge() {
+  return (
+    <span
+      title="This person hasn't clicked the verification link in their email yet."
+      className="inline-block rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500"
+    >
+      Email unverified
+    </span>
+  );
+}
+
+/** 未验证时代替审核按钮的一行说明 */
+export function AwaitingVerificationHint() {
+  return (
+    <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-400">
+      Waiting on email verification
+    </span>
+  );
+}
+
 export function formatWhen(d: Date): string {
   return d.toLocaleString("en-US", {
     month: "short",

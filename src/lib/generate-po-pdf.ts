@@ -2,8 +2,8 @@
  * Purchase-order PDF — one PO per supplier group, generated client-side
  * with jsPDF (same visual language as generate-quote-pdf.ts).
  *
- * Anonymization holds on paper too: the vendor line reads "Conneverse
- * Fulfillment" — the shop orders from Conneverse; Conneverse routes to
+ * Anonymization holds on paper too: the vendor line reads "PartHand
+ * Fulfillment" — the shop orders from PartHand; PartHand routes to
  * the seller server-side.
  */
 
@@ -38,7 +38,7 @@ export function generatePurchaseOrderPDF(args: {
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...TEAL);
-  doc.text("Conneverse", marginL, y + 12);
+  doc.text("PartHand", marginL, y + 12);
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...GRAY);
@@ -86,13 +86,13 @@ export function generatePurchaseOrderPDF(args: {
   doc.setFontSize(11);
   doc.setTextColor(...DARK);
   doc.setFont("helvetica", "bold");
-  doc.text("Conneverse Fulfillment", marginL, y);
+  doc.text("PartHand Fulfillment", marginL, y);
   doc.text(shop.name, marginL + contentW / 2, y);
   y += 12;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...GRAY);
-  doc.text("conneverse.ai · Fulfilled by Conneverse", marginL, y);
+  doc.text("parthand.com · Fulfilled by PartHand", marginL, y);
   doc.text(shop.address, marginL + contentW / 2, y);
   y += 12;
   doc.text(
@@ -162,12 +162,12 @@ export function generatePurchaseOrderPDF(args: {
   doc.setFont("helvetica", "italic");
   doc.setTextColor(...GRAY);
   doc.text(
-    "All parts Conneverse-guaranteed: fitment verified, 30-day returns, delivery SLA.",
+    "All parts PartHand-guaranteed: fitment verified, 30-day returns, delivery SLA.",
     marginL + 8,
     y + 13,
   );
   doc.text(
-    "Delivery routed by Conneverse. Questions: support@conneverse.ai",
+    "Delivery routed by PartHand. Questions: support@parthand.com",
     marginL + 8,
     y + 25,
   );

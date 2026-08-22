@@ -5,9 +5,9 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# Conneverse — standing context
+# PartHand — standing context
 
-This is Conneverse, an AI parts-procurement tool for auto repair shops.
+This is PartHand, an AI parts-procurement tool for auto repair shops.
 Architecture: headless core with three shells (standalone app, embeddable
 SMS panel, headless API). Five layers: Data → Resolution/Matching →
 Optimization Engine → Trust/Guarantee → Experience.
@@ -23,12 +23,12 @@ Prime directives:
 5. Design the miss case gracefully — never show a confident wrong part.
 6. Supplier anonymization — the UI and every client-facing API response
    show brand/condition/warranty/quality/delivery but NEVER seller or
-   channel identity; the only attribution is "Fulfilled by Conneverse."
+   channel identity; the only attribution is "Fulfilled by PartHand."
    Seller identity exists only server-side.
 7. No numeric quality scores in the UI — quality is expressed via grade
    tier badge (OEM genuine / Premium aftermarket / Value aftermarket),
    warranty term, and outcome evidence when available; the results header
-   states "N matches met the Conneverse quality bar · M didn't and aren't
+   states "N matches met the PartHand quality bar · M didn't and aren't
    shown"; the cheaper option carries "same guarantee as Option A." The
    continuous score exists only server-side for ranking, floor
    enforcement, and debug panels.

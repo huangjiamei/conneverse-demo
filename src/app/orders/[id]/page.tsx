@@ -71,7 +71,7 @@ export default async function OrderDetailPage({
 
   return (
     /* 宽度与 /orders 列表一致 —— 两页来回跳时内容不该左右跳动 */
-    <main className="w-full max-w-[1100px] mx-auto p-6">
+    <main className="w-full max-w-[1280px] mx-auto p-6">
       <Link
         href="/orders"
         className="inline-flex items-center gap-1 text-sm text-gray-500 transition hover:text-gray-700"
@@ -141,7 +141,7 @@ export default async function OrderDetailPage({
               ${unit.toFixed(2)} × {order.quantity}
             </div>
             <div className="mt-1 text-xs text-gray-400">
-              Fulfilled by Conneverse
+              Fulfilled by PartHand
             </div>
           </div>
           <div className="shrink-0 text-right">

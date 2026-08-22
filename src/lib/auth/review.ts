@@ -3,6 +3,13 @@
  *
  * 全部集中在这里,API route 只负责鉴权 + 把结果码翻成 HTTP 状态。
  *
+ * 邮箱验证是批准的硬前置 (§B 顺序): 没验证的注册不算正式进入待审核,所以这里
+ * 直接拒绝批准 —— 光在列表页隐藏按钮不算防护。拒绝不受此限 (垃圾注册照样能否掉)。
+ *
+ * 发信不在这里做: 这些函数跑在事务里,事务提交前不能发 (§D 先落库、后发信)。
+ * 调用方 (API route) 拿到 ok 结果之后再按 userId 触发通知,收件人由 notify 层
+ * 自己回库查 —— 事务已提交,读到的必然是新状态。
+ *
  * 竞态处理用「条件更新」(compare-and-set) 而不是提高隔离级别:
  *   updateMany({ where: { id, adminUserId: <读到的值> } })
  * 只有 adminUserId 仍是我们读到的那个值时才会命中 (count === 1)。
@@ -16,6 +23,7 @@ import type { Prisma, ShopAdminRequestKind } from "@prisma/client";
 export type ReviewFailure =
   | "NOT_FOUND"
   | "ALREADY_HANDLED"
+  | "EMAIL_UNVERIFIED"
   | "SHOP_HAS_ADMIN"
   | "ALREADY_ADMIN"
   | "NOT_A_MEMBER"
@@ -74,13 +82,25 @@ export async function approveShopAdminRequest(
     // 申请人必须确实属于这家店 (注册流程保证;脚本插的数据可能不保证)
     const applicant = await tx.user.findUnique({
       where: { id: req.userId },
-      select: { id: true, shopId: true, status: true },
+      select: {
+        id: true,
+        shopId: true,
+        status: true,
+        emailVerified: true,
+      },
     });
     if (!applicant) return fail("NOT_FOUND", "Applicant not found.");
     if (applicant.shopId !== req.shopId) {
       return fail(
         "NOT_A_MEMBER",
         "The applicant is not a member of this shop."
+      );
+    }
+    // 批准会把他置成 APPROVED —— 邮箱没验证的人不该被放进来
+    if (!applicant.emailVerified) {
+      return fail(
+        "EMAIL_UNVERIFIED",
+        "This applicant hasn't verified their email address yet. The request isn't ready for review."
       );
     }
     if (shop.adminUserId === req.userId) {
@@ -283,7 +303,12 @@ export async function reviewUser(
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { id: userId },
-      select: { id: true, shopId: true, status: true },
+      select: {
+        id: true,
+        shopId: true,
+        status: true,
+        emailVerified: true,
+      },
     });
     if (!user) return fail("NOT_FOUND", "User not found.");
 
@@ -297,6 +322,13 @@ export async function reviewUser(
       return fail(
         "ALREADY_HANDLED",
         `This user is already ${user.status.toLowerCase()}.`
+      );
+    }
+    // 只挡批准: 拒绝一个没验证邮箱的注册是完全合理的动作
+    if (action === "approve" && !user.emailVerified) {
+      return fail(
+        "EMAIL_UNVERIFIED",
+        "This user hasn't verified their email address yet. They aren't in the review queue."
       );
     }
 
@@ -329,6 +361,7 @@ export function statusForFailure(code: ReviewFailure): number {
     case "RACE_LOST":
       return 409;
     case "NOT_A_MEMBER":
+    case "EMAIL_UNVERIFIED":
       return 422;
   }
 }

@@ -11,7 +11,7 @@
 import Stripe from "stripe";
 
 export const STRIPE_NOT_CONFIGURED =
-  "Payments are not configured yet. Please contact Conneverse.";
+  "Payments are not configured yet. Please contact PartHand.";
 
 let cached: Stripe | null = null;
 
@@ -37,11 +37,10 @@ export function getStripe(): Stripe | null {
   return cached;
 }
 
-/** success/cancel 要绝对 URL。本地默认 3000,线上用 APP_URL。 */
-export function appUrl(): string {
-  return (
-    process.env.APP_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
-}
+/**
+ * success/cancel 要绝对 URL。
+ *
+ * 实现搬到 lib/appUrl.ts 了 —— 邮件链接也要同一个地址,两处各算一遍迟早分叉。
+ * 这里保留导出,免得动 orders 那边的 import。
+ */
+export { appUrl } from "@/lib/appUrl";

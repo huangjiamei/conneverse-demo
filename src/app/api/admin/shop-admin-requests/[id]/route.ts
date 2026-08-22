@@ -1,7 +1,8 @@
 /**
  * POST /api/admin/shop-admin-requests/[id] —— body: { action: "approve" | "reject", note? }
  *
- * 仅平台管理员。事务 + 重校验都在 lib/auth/review.ts 里,这里只做鉴权和状态码翻译。
+ * 仅平台管理员。事务 + 重校验都在 lib/auth/review.ts 里,这里只做鉴权、状态码翻译,
+ * 以及事务提交之后的审核结果邮件。
  */
 
 import { NextResponse } from "next/server";
@@ -11,6 +12,7 @@ import {
   rejectShopAdminRequest,
   statusForFailure,
 } from "@/lib/auth/review";
+import { notifyApproved } from "@/lib/email/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -53,5 +55,11 @@ export async function POST(
       { status: statusForFailure(result.code) }
     );
   }
+
+  // 批准一条 CLAIM/REPLACE 顺带把申请人置成 APPROVED —— 那是一次真实的状态流转,
+  // 所以发 approved。事务已提交才发,且 ALREADY_HANDLED 保证不会重复 (§B)。
+  // 拒绝这里不发信: 拒绝"当管理员"不等于拒绝这个账号,User.status 没动。
+  if ("newAdminUserId" in result) await notifyApproved(result.newAdminUserId);
+
   return NextResponse.json(result);
 }

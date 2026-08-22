@@ -1,13 +1,13 @@
-# Conneverse — Trusted Parts Agent
+# PartHand — Trusted Parts Agent
 
-AI parts-procurement for auto repair shops. Conneverse aggregates every
+AI parts-procurement for auto repair shops. PartHand aggregates every
 sourcing channel (marketplaces, distributor catalogs, DTC) into two
 trustworthy picks — **Ready Now** and **Best Price** — with guaranteed
 fitment, delivery, and returns, and never exposes which seller a part
 came from. The only attribution a shop ever sees is "Fulfilled by
-Conneverse."
+PartHand."
 
-**Live demo:** https://conneverse-demo.vercel.app
+**Live demo:** https://parthand.com
 Pricing is simulated, but the architecture is the real product.
 
 ---

@@ -1,14 +1,19 @@
 /**
  * 路由策略 —— proxy.ts 和页面共用同一份规则,避免两处判断打架。
  *
- * 公开: / (login) · /register · /pending · 以及它们要打的几个 API。
+ * 公开: / (login) · /register · /pending · /verify-email · 以及它们要打的几个 API。
  * 其余一律要 APPROVED 会话;/admin/** 额外要 PLATFORM_ADMIN。
  */
 
 import type { Session } from "./types";
 
-/** 登录/注册/待审核 —— 未登录可访问 */
-const PUBLIC_PAGES = new Set(["/", "/register", "/pending"]);
+/**
+ * 登录/注册/待审核/邮箱验证 —— 未登录可访问。
+ *
+ * /verify-email 必须公开: 用户点邮件链接时还没验证、拿不到会话,
+ * 挡在这里等于验证流程永远走不完。
+ */
+const PUBLIC_PAGES = new Set(["/", "/register", "/pending", "/verify-email"]);
 
 /**
  * 公开 API (登录注册流程本身要用)。
@@ -21,6 +26,8 @@ const PUBLIC_APIS = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
+  // 重发验证邮件: 调用方一样还没有会话。接口自己做限流 + 中性回答。
+  "/api/auth/resend-verification",
   "/api/shops",
   "/api/stripe/webhook",
 ];

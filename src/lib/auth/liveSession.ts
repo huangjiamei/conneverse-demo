@@ -30,8 +30,8 @@ import type { Session } from "./types";
 export type LiveSession = Session & { shopName: string | null };
 
 /**
- * @returns 与库一致的会话;账号已不存在 / 已不是 APPROVED 时返回 null
- *          (调用方一律当作未登录)
+ * @returns 与库一致的会话;账号已不存在 / 已不是 APPROVED / 邮箱未验证时返回
+ *          null (调用方一律当作未登录)
  */
 export async function getLiveSession(): Promise<LiveSession | null> {
   const claimed = await getSession();
@@ -63,12 +63,16 @@ export async function getLiveSession(): Promise<LiveSession | null> {
       email: true,
       shopId: true,
       status: true,
+      emailVerified: true,
       adminOf: { select: { id: true } }, // Shop.adminUserId 的反向关系 = 唯一真相
       shop: { select: { name: true } },
     },
   });
   if (!user) return null;
   if (user.status !== "APPROVED") return null; // 登录后被停用/拒绝
+  // 登录守卫已经拦过一道;这里再判一次是为了让"未验证"和 status 一样,
+  // 任何一次请求都以库为准 —— 手工把 emailVerified 改回 false 也能立刻生效
+  if (!user.emailVerified) return null;
 
   return {
     id: user.id,

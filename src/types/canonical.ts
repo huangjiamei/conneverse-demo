@@ -13,7 +13,7 @@
  *   - `PublicOffer`  — CLIENT-FACING. Everything the UI needs to render a
  *                      card, with NO seller/channel identity and NO
  *                      numeric quality score (directives 6 & 7). The only
- *                      attribution is "Fulfilled by Conneverse".
+ *                      attribution is "Fulfilled by PartHand".
  */
 
 // ─── Vehicle & repair order ─────────────────────────────────────────
@@ -131,8 +131,8 @@ export type PublicOffer = {
   shippingCost: number;
   currency: string;
   deliveryEstimate: DeliveryEstimate;
-  /** Conneverse guarantee badge labels. Uniform across options —
-   * Conneverse stands behind every pick equally. */
+  /** PartHand guarantee badge labels. Uniform across options —
+   * PartHand stands behind every pick equally. */
   guarantees: string[];
   fitmentVerified: boolean;
   /** How fitment was established ("Marketplace compatibility table for
@@ -308,7 +308,7 @@ export type PurchaseOrder = {
   shopId: string;
   vehicle: Vehicle;
   /** Seller the PO is routed to — SERVER-ONLY, never returned to a
-   * client-facing surface. Attribution is "Fulfilled by Conneverse". */
+   * client-facing surface. Attribution is "Fulfilled by PartHand". */
   sellerId: string;
   status: OrderStatus;
   /** Full transition log. Manual (concierge ops) today; the same

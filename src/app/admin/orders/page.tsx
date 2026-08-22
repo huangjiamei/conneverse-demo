@@ -18,7 +18,7 @@ import { AdminOrdersClient, type AdminOrderRow } from "./AdminOrdersClient";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Orders — Conneverse admin" };
+export const metadata = { title: "Orders — PartHand admin" };
 
 export default async function AdminOrdersPage({
   searchParams,

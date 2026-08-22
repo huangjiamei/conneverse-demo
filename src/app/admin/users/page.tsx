@@ -14,6 +14,8 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma, UserStatus } from "@prisma/client";
 import { ReviewActions } from "@/components/review/ReviewActions";
 import {
+  AwaitingVerificationHint,
+  EmailUnverifiedBadge,
   EmptyState,
   PageHeader,
   ReviewRow,
@@ -71,7 +73,8 @@ export default async function AdminUsersPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, _count: { select: { members: true } } },
     }),
-    prisma.user.count({ where: { status: "PENDING" } }),
+    // 只数真正可审的 —— 邮箱还没验证的注册不算进待审核队列 (§B)
+    prisma.user.count({ where: { status: "PENDING", emailVerified: true } }),
   ]);
 
   // 保留其它过滤条件,只改一个维度
@@ -146,6 +149,7 @@ export default async function AdminUsersPage({
                     </span>
                     <span className="text-sm text-gray-500">{u.email}</span>
                     <StatusBadge status={u.status} />
+                    {!u.emailVerified && <EmailUnverifiedBadge />}
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                       {isShopAdmin ? "Shop admin" : "Employee"}
                     </span>
@@ -172,9 +176,12 @@ export default async function AdminUsersPage({
                   </div>
                 </div>
 
-                {u.status === "PENDING" && (
-                  <ReviewActions endpoint={`/api/users/${u.id}/review`} />
-                )}
+                {u.status === "PENDING" &&
+                  (u.emailVerified ? (
+                    <ReviewActions endpoint={`/api/users/${u.id}/review`} />
+                  ) : (
+                    <AwaitingVerificationHint />
+                  ))}
               </ReviewRow>
             );
           })}

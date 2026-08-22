@@ -11,8 +11,8 @@ import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/auth/password";
 
-const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@conneverse.com";
-const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "Conneverse123!";
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@parthand.com";
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "Parthand123!";
 const RESET_PASSWORD = process.argv.includes("--reset-password");
 
 const DEMO_SHOPS = [

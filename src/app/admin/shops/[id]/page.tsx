@@ -15,6 +15,8 @@ import { prisma } from "@/lib/prisma";
 import { ReviewActions } from "@/components/review/ReviewActions";
 import { ShopInfoForm } from "@/components/shop/ShopInfoForm";
 import {
+  AwaitingVerificationHint,
+  EmailUnverifiedBadge,
   EmptyState,
   KindBadge,
   ReviewRow,
@@ -45,6 +47,7 @@ export default async function AdminShopDetailPage({
           name: true,
           email: true,
           status: true,
+          emailVerified: true,
           createdAt: true,
         },
       },
@@ -52,7 +55,14 @@ export default async function AdminShopDetailPage({
         where: { status: "PENDING" },
         orderBy: { createdAt: "asc" },
         include: {
-          user: { select: { name: true, email: true, status: true } },
+          user: {
+            select: {
+              name: true,
+              email: true,
+              status: true,
+              emailVerified: true,
+            },
+          },
         },
       },
       _count: { select: { repairOrders: true } },
@@ -206,6 +216,7 @@ export default async function AdminShopDetailPage({
                           {r.user.email}
                         </span>
                         <StatusBadge status={r.user.status} />
+                        {!r.user.emailVerified && <EmailUnverifiedBadge />}
                         <KindBadge kind={r.kind} />
                       </div>
                       <div className="mt-1 text-xs text-gray-400">
@@ -220,14 +231,18 @@ export default async function AdminShopDetailPage({
                         {kindHint(r.kind)}
                       </p>
                     </div>
-                    <ReviewActions
-                      endpoint={`/api/admin/shop-admin-requests/${r.id}`}
-                      confirmApprove={
-                        r.kind === "REPLACE"
-                          ? `Approve this REPLACE? ${r.user.email} becomes the admin of ${shop.name}, and ${adminLabel ?? "the current admin"} is demoted to a regular employee.`
-                          : undefined
-                      }
-                    />
+                    {r.user.emailVerified ? (
+                      <ReviewActions
+                        endpoint={`/api/admin/shop-admin-requests/${r.id}`}
+                        confirmApprove={
+                          r.kind === "REPLACE"
+                            ? `Approve this REPLACE? ${r.user.email} becomes the admin of ${shop.name}, and ${adminLabel ?? "the current admin"} is demoted to a regular employee.`
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      <AwaitingVerificationHint />
+                    )}
                   </ReviewRow>
                 ))}
               </ul>
@@ -253,15 +268,19 @@ export default async function AdminShopDetailPage({
                       </span>
                       <span className="text-sm text-gray-500">{m.email}</span>
                       <StatusBadge status={m.status} />
+                      {!m.emailVerified && <EmailUnverifiedBadge />}
                       {shop.adminUserId === m.id && (
                         <span className="inline-block rounded border border-[#00B4A6]/40 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700">
                           Admin
                         </span>
                       )}
                     </div>
-                    {m.status === "PENDING" && (
-                      <ReviewActions endpoint={`/api/users/${m.id}/review`} />
-                    )}
+                    {m.status === "PENDING" &&
+                      (m.emailVerified ? (
+                        <ReviewActions endpoint={`/api/users/${m.id}/review`} />
+                      ) : (
+                        <AwaitingVerificationHint />
+                      ))}
                   </li>
                 ))}
               </ul>

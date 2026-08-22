@@ -20,7 +20,7 @@ import { OrderStatusBadge } from "./OrderStatusBadge";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Orders — Conneverse" };
+export const metadata = { title: "Orders — PartHand" };
 
 export default async function OrdersPage() {
   const session = await requireLiveSession();
@@ -49,10 +49,10 @@ export default async function OrdersPage() {
   const showWhoOrdered = session.role !== "EMPLOYEE";
 
   return (
-    <main className="w-full max-w-[1100px] mx-auto p-6">
+    <main className="w-full max-w-[1280px] mx-auto p-6">
       <PageHeader
         title="Orders"
-        subtitle="Parts you've ordered through Conneverse."
+        subtitle="Parts you've ordered through PartHand."
         right={
           <Link
             href="/search"

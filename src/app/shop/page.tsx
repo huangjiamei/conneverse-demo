@@ -20,6 +20,8 @@ import { landingPath } from "@/lib/auth/routes";
 import { ReviewActions } from "@/components/review/ReviewActions";
 import { ShopInfoForm } from "@/components/shop/ShopInfoForm";
 import {
+  AwaitingVerificationHint,
+  EmailUnverifiedBadge,
   EmptyState,
   PageHeader,
   ReviewRow,
@@ -51,7 +53,13 @@ export default async function MyShopPage() {
   });
   if (!shop) redirect(landingPath(session));
 
-  const pending = shop.members.filter((m) => m.status === "PENDING");
+  // 邮箱验证通过才算真的进了待审核队列 (§B);还没验证的单独列出来,不给按钮
+  const pending = shop.members.filter(
+    (m) => m.status === "PENDING" && m.emailVerified
+  );
+  const unverified = shop.members.filter(
+    (m) => m.status === "PENDING" && !m.emailVerified
+  );
   const rest = shop.members.filter((m) => m.status !== "PENDING");
   const where = [shop.city, shop.state].filter(Boolean).join(", ");
 
@@ -129,6 +137,40 @@ export default async function MyShopPage() {
               </ul>
             )}
           </section>
+
+          {unverified.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-gray-500">
+                Not verified yet ({unverified.length})
+              </h2>
+              <p className="mb-2.5 text-xs leading-relaxed text-gray-400">
+                These people registered but haven&apos;t clicked the link in
+                their verification email. They move to Awaiting approval on
+                their own once they do.
+              </p>
+              <ul className="flex flex-col gap-2.5">
+                {unverified.map((u) => (
+                  <ReviewRow key={u.id}>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-[#1A1A2E]">
+                          {u.name ?? "—"}
+                        </span>
+                        <EmailUnverifiedBadge />
+                      </div>
+                      <div className="mt-0.5 text-sm text-gray-500">
+                        {u.email}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-400">
+                        Registered {formatWhen(u.createdAt)}
+                      </div>
+                    </div>
+                    <AwaitingVerificationHint />
+                  </ReviewRow>
+                ))}
+              </ul>
+            </section>
+          )}
           <section>
             <h2 className="text-[13px] font-bold uppercase tracking-wide text-gray-500 mb-3">
               Members ({rest.length})
@@ -154,6 +196,7 @@ export default async function MyShopPage() {
                             {u.email}
                           </span>
                           <StatusBadge status={u.status} />
+                          {!u.emailVerified && <EmailUnverifiedBadge />}
                           {shop.adminUserId === u.id && (
                             <span className="inline-block rounded border border-[#00B4A6]/40 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700">
                               Admin

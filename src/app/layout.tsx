@@ -4,7 +4,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { getLiveSession } from "@/lib/auth/liveSession";
 
 export const metadata: Metadata = {
-  title: "Conneverse — Trusted Parts Agent",
+  title: "PartHand — Trusted Parts Agent",
   description:
     "Quality-verified parts with guaranteed fitment, delivery, and returns.",
 };

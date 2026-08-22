@@ -1274,7 +1274,7 @@ export default function VehicleSearchClient({
       {searching && (
         <div className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white p-10 text-sm text-gray-500">
           <Loader2 size={16} className="animate-spin" />
-          Searching Conneverse…
+          Searching PartHand…
         </div>
       )}
 

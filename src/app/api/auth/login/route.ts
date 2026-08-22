@@ -6,8 +6,9 @@
  * 否则看 User.adminOf (即 Shop.adminUserId 反向关系) → SHOP_ADMIN / EMPLOYEE。
  *
  * 错误信息一律 "Invalid email or password",不透露邮箱是否注册过。
- * 唯一例外是密码正确但 status !== APPROVED —— 此时对方已证明自己是账号
- * 本人,回一个 status 让客户端跳 /pending。这种用户拿不到会话 (§5 方案 A)。
+ * 唯一例外是密码正确但账号还进不来 (邮箱未验证 / status !== APPROVED) ——
+ * 此时对方已证明自己是账号本人,回一个可判断的原因让客户端提示或跳转。
+ * 这两种用户都拿不到会话 (§5 方案 A)。
  */
 
 import { NextResponse } from "next/server";
@@ -69,6 +70,21 @@ export async function POST(req: Request) {
   });
   if (!user) return reject();
   if (!(await verifyPassword(password, user.passwordHash))) return reject();
+
+  // ---- 邮箱验证守卫 (§C4) ----
+  // 和 status 是两道独立的闸,两个都过才放行。这一道在前,不分 status:
+  // 没验证过的邮箱就是没证明可达,APPROVED 也不例外 (老账号已由 Vera 回填成
+  // 已验证,不会被锁死)。现有 status 逻辑一个字没动,只是并了上去。
+  if (!user.emailVerified) {
+    return NextResponse.json(
+      {
+        error: "Please verify your email first",
+        needsEmailVerification: true,
+        redirect: `/verify-email?email=${encodeURIComponent(user.email)}`,
+      },
+      { status: 403 }
+    );
+  }
 
   if (user.status !== "APPROVED") {
     // 密码已对上 → 可以安全地告诉本人账号状态

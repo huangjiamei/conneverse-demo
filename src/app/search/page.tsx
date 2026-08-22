@@ -14,7 +14,7 @@ import VehicleSearchClient from "./VehicleSearchClient";
 import { requireLiveSession } from "@/lib/auth/liveSession";
 
 export const metadata = {
-  title: "Search — Conneverse",
+  title: "Search — PartHand",
 };
 
 export default async function VehicleSearchPage() {

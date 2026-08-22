@@ -31,7 +31,7 @@ export function AppHeader({ session }: { session: LiveSession | null }) {
   const brand = (
     <>
       <span className="text-lg sm:text-xl font-bold tracking-tight group-hover:text-[#00B4A6] transition">
-        Conneverse
+        PartHand
       </span>
       <span className="block text-[12px] text-[#00B4A6] -mt-0.5 tracking-wide">
         Trusted Parts Agent

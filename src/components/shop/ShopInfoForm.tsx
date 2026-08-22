@@ -109,7 +109,7 @@ export function ShopInfoForm({
         hint={
           canEditName
             ? undefined
-            : "Only the Conneverse platform team can rename a shop."
+            : "Only the PartHand platform team can rename a shop."
         }
       >
         <input

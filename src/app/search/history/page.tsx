@@ -24,7 +24,7 @@ import { searchVisibilityWhere } from "@/lib/searchScope";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Search history — Conneverse",
+  title: "Search history — PartHand",
 };
 
 export default async function SearchHistoryPage() {
