@@ -12,7 +12,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import { hashPassword, validatePassword } from "@/lib/auth/password";
 import { clientIp, rateLimit } from "@/lib/auth/rateLimit";
 import { sendVerificationEmail } from "@/lib/email/notify";
 
@@ -64,9 +64,8 @@ export async function POST(req: Request) {
   if (!email) fieldErrors.email = "Email is required.";
   else if (!EMAIL_RE.test(email)) fieldErrors.email = "Enter a valid email address.";
 
-  if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
-    fieldErrors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
-  }
+  const passwordError = validatePassword(password);
+  if (passwordError) fieldErrors.password = passwordError;
 
   if (typeof shopId !== "string" || !shopId) {
     fieldErrors.shopId = "Select your shop.";

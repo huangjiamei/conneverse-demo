@@ -23,15 +23,25 @@ export default async function LoginPage() {
       title="Sign in"
       subtitle="Access quality-verified parts for your shop."
       footer={
-        <>
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            className="font-medium text-[#00B4A6] hover:underline"
-          >
-            Create one
-          </Link>
-        </>
+        <div className="space-y-2">
+          <div>
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/register"
+              className="font-medium text-[#00B4A6] hover:underline"
+            >
+              Create one
+            </Link>
+          </div>
+          <div>
+            <Link
+              href="/forgot-password"
+              className="font-medium text-[#00B4A6] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        </div>
       }
     >
       <LoginForm />

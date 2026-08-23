@@ -286,6 +286,38 @@ export function shopAdminNewMember({
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  3c. 忘记密码:重置链接
+// ═══════════════════════════════════════════════════════════════
+
+export function passwordReset({
+  name,
+  resetUrl,
+  ttlHours,
+}: {
+  name: string | null;
+  resetUrl: string;
+  ttlHours: number;
+}): EmailContent {
+  return {
+    subject: "Reset your PartHand password",
+    html: layout(
+      "Reset your password",
+      [
+        p(greeting(name)),
+        p(
+          "We got a request to reset the password on your PartHand account. Choose a new one here:"
+        ),
+        button(resetUrl, "Reset password"),
+        p(
+          `<span style="color:${MUTED};font-size:13px;">This link works once and expires in ${ttlHours === 1 ? "an hour" : `${ttlHours} hours`}. If you didn't ask for this, ignore this email — your password stays as it is.</span>`
+        ),
+        fallbackLink(resetUrl),
+      ].join("")
+    ),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  4. 审核通过
 // ═══════════════════════════════════════════════════════════════
 

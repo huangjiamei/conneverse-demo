@@ -1,7 +1,8 @@
 /**
  * 路由策略 —— proxy.ts 和页面共用同一份规则,避免两处判断打架。
  *
- * 公开: / (login) · /register · /pending · /verify-email · 以及它们要打的几个 API。
+ * 公开: / (login) · /register · /pending · /verify-email · /forgot-password ·
+ * /reset-password · 以及它们要打的几个 API。
  * 其余一律要 APPROVED 会话;/admin/** 额外要 PLATFORM_ADMIN。
  */
 
@@ -13,7 +14,15 @@ import type { Session } from "./types";
  * /verify-email 必须公开: 用户点邮件链接时还没验证、拿不到会话,
  * 挡在这里等于验证流程永远走不完。
  */
-const PUBLIC_PAGES = new Set(["/", "/register", "/pending", "/verify-email"]);
+const PUBLIC_PAGES = new Set([
+  "/",
+  "/register",
+  "/pending",
+  "/verify-email",
+  // 忘了密码的人当然登不进来 —— 这两页挡在会话后面就永远走不完流程
+  "/forgot-password",
+  "/reset-password",
+]);
 
 /**
  * 公开 API (登录注册流程本身要用)。
@@ -26,8 +35,11 @@ const PUBLIC_APIS = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
-  // 重发验证邮件: 调用方一样还没有会话。接口自己做限流 + 中性回答。
+  // 重发验证邮件 / 忘记密码 / 重置密码: 调用方一样还没有会话。
+  // 三个接口都自己做限流,前两个还做中性回答 (不泄露邮箱是否注册过)。
   "/api/auth/resend-verification",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
   "/api/shops",
   "/api/stripe/webhook",
 ];

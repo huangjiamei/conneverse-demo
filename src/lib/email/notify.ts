@@ -11,6 +11,10 @@
 import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/appUrl";
 import { issueEmailVerificationToken } from "@/lib/auth/emailVerification";
+import {
+  issuePasswordResetToken,
+  PASSWORD_RESET_TTL_MS,
+} from "@/lib/auth/passwordReset";
 import { sendEmail } from "./resend";
 import * as t from "./templates";
 
@@ -124,6 +128,46 @@ export async function sendVerificationEmail(userId: string): Promise<boolean> {
     return res.ok;
   } catch (err) {
     console.error("[notify] sendVerificationEmail failed", err);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  忘记密码 → passwordReset
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 签发重置令牌并把链接发出去。该用户手上的旧链接同时失效。
+ *
+ * 收件人从库里取 —— 调用方只传 userId,前端提交的地址一个字都不信 (§D)。
+ * 平台 Admin 不走这条路: 这里只查 User 表,Admin 的密码由 DB / Profile 改。
+ *
+ * @returns 发信是否成功 —— 调用方只该用来记日志。对外的提示必须中性:
+ *          发没发出去、账号存不存在,都不能从响应里看出来。
+ */
+export async function sendPasswordResetEmail(userId: string): Promise<boolean> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    });
+    if (!user) return false;
+
+    const raw = await issuePasswordResetToken(userId);
+    const resetUrl = `${appUrl()}/reset-password?token=${encodeURIComponent(raw)}`;
+
+    const { subject, html } = t.passwordReset({
+      name: user.name,
+      resetUrl,
+      ttlHours: Math.round(PASSWORD_RESET_TTL_MS / (60 * 60 * 1000)),
+    });
+    const res = await sendEmail({ to: user.email, subject, html });
+    if (!res.ok) {
+      console.error(`[notify] passwordReset not delivered to user ${userId}`);
+    }
+    return res.ok;
+  } catch (err) {
+    console.error("[notify] sendPasswordResetEmail failed", err);
     return false;
   }
 }
