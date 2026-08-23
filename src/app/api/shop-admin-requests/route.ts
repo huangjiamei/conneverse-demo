@@ -6,11 +6,15 @@
  * shopId 永远取自会话。
  *
  * 注册时的那条 CLAIM 走的是 /api/auth/register (那时还没有会话),两边规则一致。
+ *
+ * 建好之后通知平台管理员。注册那条路径不在这里通知 —— 那时申请人还没验证邮箱,
+ * 由验证成功后的 notifyEmailVerified 补发,两边靠 emailVerified 分工,不会重复。
  */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getLiveSession } from "@/lib/auth/liveSession";
+import { notifyShopAdminRequestFiled } from "@/lib/email/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +79,12 @@ export async function POST(req: Request) {
         { status: created.status }
       );
     }
+
+    // 事务已提交才通知 (§D 先落库、后发信)。走到这条路径的人必然是 APPROVED,
+    // 也就必然已验证 —— 通知会立刻发出去,不用等任何验证事件。
+    // notifyShopAdminRequestFiled 不抛,发信失败不影响申请已经提交成功。
+    await notifyShopAdminRequestFiled(created.id);
+
     return NextResponse.json(created, { status: 201 });
   } catch (err) {
     console.error("[shop-admin-requests] failed", err);

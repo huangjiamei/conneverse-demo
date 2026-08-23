@@ -14,6 +14,19 @@ const MUTED = "#6B7280";
 
 export type EmailContent = { subject: string; html: string };
 
+/**
+ * 待审内容的三种形态。EMPLOYEE = 注册本身要过审;CLAIM/REPLACE = 已在店里的人
+ * 申请当管理员 —— 后两种审的是另一件事,落地页也不同。
+ */
+export type ReviewKind = "EMPLOYEE" | "CLAIM" | "REPLACE";
+
+const REVIEW_KIND_LABEL: Record<ReviewKind, string> = {
+  EMPLOYEE: "Employee access",
+  CLAIM: "Shop admin — claiming a shop with no admin",
+  REPLACE: "Shop admin — replacing the current admin",
+};
+
+
 export function escapeHtml(raw: string): string {
   return raw
     .replace(/&/g, "&amp;")
@@ -116,27 +129,50 @@ export function verifyEmail({
 export function applicantReceived({
   name,
   shopName,
-  isAdminClaim,
+  kind,
+  justVerified,
 }: {
   name: string | null;
   shopName: string | null;
-  isAdminClaim: boolean;
+  kind: ReviewKind;
+  /**
+   * true = 刚点完验证链接过来的 (注册那条路径),那时「邮箱已验证」正是他关心的
+   * 新消息;false = 早就验证过的成员事后提交申请,再提验证只会让人困惑。
+   */
+  justVerified: boolean;
 }): EmailContent {
   const where = shopName ? ` for <strong>${escapeHtml(shopName)}</strong>` : "";
+  const shop = shopName ? ` <strong>${escapeHtml(shopName)}</strong>` : " your shop";
+
+  const lead = justVerified
+    ? [
+        p(
+          `Your email is verified and your request${where} is now under review by the PartHand team.`
+        ),
+        kind === "EMPLOYEE"
+          ? ""
+          : p(
+              "You also asked to be this shop's admin — that's part of the same review."
+            ),
+      ]
+    : [
+        p(
+          `Your request to become the admin of${shop} is now under review by the PartHand team.`
+        ),
+        kind === "REPLACE"
+          ? p(
+              `<span style="color:${MUTED};font-size:13px;">Approving it would replace the shop's current admin.</span>`
+            )
+          : "",
+      ];
+
   return {
     subject: "We've received your PartHand request",
     html: layout(
       "Your request is under review",
       [
         p(greeting(name)),
-        p(
-          `Your email is verified and your request${where} is now under review by the PartHand team.`
-        ),
-        isAdminClaim
-          ? p(
-              "You also asked to be this shop's admin — that's part of the same review."
-            )
-          : "",
+        ...lead,
         p("We'll email you as soon as a decision is made. Nothing to do until then."),
       ].join("")
     ),
@@ -151,13 +187,13 @@ export function adminNewRequest({
   applicantName,
   applicantEmail,
   shopName,
-  isAdminClaim,
+  kind,
   reviewUrl,
 }: {
   applicantName: string | null;
   applicantEmail: string;
   shopName: string | null;
-  isAdminClaim: boolean;
+  kind: ReviewKind;
   reviewUrl: string;
 }): EmailContent {
   const who = applicantName?.trim() || applicantEmail;
@@ -165,7 +201,7 @@ export function adminNewRequest({
     ["Name", applicantName?.trim() || "—"],
     ["Email", applicantEmail],
     ["Shop", shopName ?? "—"],
-    ["Requesting", isAdminClaim ? "Shop admin (claim)" : "Employee access"],
+    ["Requesting", REVIEW_KIND_LABEL[kind]],
   ];
   const table = `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 4px;font-size:14px;">
@@ -184,7 +220,9 @@ export function adminNewRequest({
     html: layout(
       "A new request is waiting for review",
       [
-        p("This applicant verified their email address, so the request is now live:"),
+        p(
+          "This request is from a verified email address and is waiting on the platform team:"
+        ),
         table,
         button(reviewUrl, "Review request"),
       ].join("")

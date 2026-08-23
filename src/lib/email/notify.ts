@@ -56,12 +56,45 @@ async function platformAdminRecipients(): Promise<string[]> {
   return normalizeRecipients([process.env.ADMIN_NOTIFY_EMAIL]);
 }
 
-/** 该用户是否还有一条在审的「认领店铺管理员」申请 —— 决定邮件里的措辞 */
-async function hasPendingAdminClaim(userId: string): Promise<boolean> {
-  const n = await prisma.shopAdminRequest.count({
+/**
+ * 该用户名下在审的店铺管理员申请 —— 决定邮件里的措辞和「去哪审」的落地页。
+ * 没有就返回 null,那时待审的只是这个账号本身。
+ */
+async function pendingAdminRequest(userId: string) {
+  return prisma.shopAdminRequest.findFirst({
     where: { userId, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, kind: true, shopId: true },
   });
-  return n > 0;
+}
+
+/**
+ * 平台管理员该点哪个链接去审。
+ *
+ * 账号本身 → Users 列表;店铺管理员申请 → 那家店的详情页,「Admin requests」
+ * 就在那儿 (批准它会连带把申请人置成 APPROVED,一次动作办完两件事)。
+ */
+function reviewUrlFor(shopId: string | null): string {
+  return shopId
+    ? `${appUrl()}/admin/shops/${shopId}`
+    : `${appUrl()}/admin/users?status=PENDING`;
+}
+
+/**
+ * 一条待审通知扇给每一个平台管理员 —— 一人一封。
+ *
+ * adminNewRequest 有两个触发点 (邮箱验证通过 / 已验证的人提交申请),
+ * 收件和发送方式必须完全一致,所以收在这里。
+ */
+async function fanOutToPlatformAdmins(content: t.EmailContent): Promise<void> {
+  const admins = await platformAdminRecipients();
+  if (admins.length === 0) {
+    console.error(
+      "[notify] no platform-admin recipient — add an Admin row or set ADMIN_NOTIFY_EMAIL"
+    );
+    return;
+  }
+  await Promise.all(admins.map((to) => sendEmail({ to, ...content })));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -113,37 +146,99 @@ export async function notifyEmailVerified(userId: string): Promise<void> {
     if (!user) return;
 
     const shopName = user.shop?.name ?? null;
-    const isAdminClaim = await hasPendingAdminClaim(userId);
-    const admins = await platformAdminRecipients();
+    // 注册时勾了「申请当管理员」的话,这条 CLAIM 在注册那一刻就建好了,
+    // 但那时人还没验证、不能发信 —— 所以它的通知是在这里补上的。
+    const request = await pendingAdminRequest(userId);
 
     const applicant = t.applicantReceived({
       name: user.name,
       shopName,
-      isAdminClaim,
+      kind: request?.kind ?? "EMPLOYEE",
+      justVerified: true, // 就是刚点完验证链接过来的
     });
     const forAdmins = t.adminNewRequest({
       applicantName: user.name,
       applicantEmail: user.email,
       shopName,
-      isAdminClaim,
-      reviewUrl: `${appUrl()}/admin/users?status=PENDING`,
+      kind: request?.kind ?? "EMPLOYEE",
+      reviewUrl: reviewUrlFor(request?.shopId ?? null),
     });
 
-    if (admins.length === 0) {
-      console.error(
-        "[notify] no platform-admin recipient — add an Admin row or set ADMIN_NOTIFY_EMAIL"
-      );
-    }
-
-    // 管理员一人一封,不是一封塞多个收件人: 后者会让他们在 To 里互相看到
-    // 对方邮箱,而且 Resend 只回一个 id,某一位投递失败就分辨不出来。
-    // 全部并发,一封发不出去不拖累其它封。
+    // 一封发不出去不该拖累另一封
     await Promise.all([
       sendEmail({ to: user.email, ...applicant }),
-      ...admins.map((to) => sendEmail({ to, ...forAdmins })),
+      fanOutToPlatformAdmins(forAdmins),
     ]);
   } catch (err) {
     console.error("[notify] notifyEmailVerified failed", err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ShopAdminRequest 进入待审核
+//    → adminNewRequest (平台管理员) + applicantReceived (申请人)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 一条店铺管理员申请进入待审核时: 通知每一个平台管理员,并给申请人本人回一封
+ * 确认 —— 和注册流程收到的是同一封 applicantReceived,只是措辞按「早已验证」调整。
+ *
+ * 为什么单独有这个入口:adminNewRequest 原先只挂在「邮箱验证通过」上。新注册的人
+ * 验证紧跟申请,顺带就发了;但一个**早就验证过**的员工事后提交 CLAIM/REPLACE 时
+ * 根本没有验证事件,那条申请就静悄悄躺在库里没人知道。
+ *
+ * 两条路径靠 emailVerified 分工,天然互斥,所以同一条申请只会发一次:
+ *   · 申请人已验证 → 这里在创建时立刻发;之后他不会再有验证事件
+ *     (sendVerificationEmail 对已验证的人直接返回,令牌也兑换不出 VERIFIED)
+ *   · 申请人未验证 → 这里直接跳过,等 notifyEmailVerified 那边发
+ *     (注册时勾选「申请当管理员」建出来的 CLAIM 走的就是这条)
+ *
+ * 判「验没验证」以库为准,不看调用方传什么 —— 调用点将来多了也不会漏。
+ */
+export async function notifyShopAdminRequestFiled(
+  requestId: string
+): Promise<void> {
+  try {
+    const req = await prisma.shopAdminRequest.findUnique({
+      where: { id: requestId },
+      select: {
+        kind: true,
+        status: true,
+        shopId: true,
+        shop: { select: { name: true } },
+        user: { select: { email: true, name: true, emailVerified: true } },
+      },
+    });
+    if (!req) return;
+    if (req.status !== "PENDING") return; // 已经审完了,没什么可通知的
+    if (!req.user.emailVerified) return; // 未验证 → 交给 notifyEmailVerified
+
+    const shopName = req.shop?.name ?? null;
+
+    // 申请人本人也收一封确认,和注册流程一致。justVerified: false —— 他的邮箱
+    // 是早就验证过的,这封信要讲的是「申请收到了」,不是「邮箱验证通过了」。
+    const applicant = t.applicantReceived({
+      name: req.user.name,
+      shopName,
+      kind: req.kind,
+      justVerified: false,
+    });
+
+    // 一封发不出去不该拖累另一封
+    await Promise.all([
+      sendEmail({ to: req.user.email, ...applicant }),
+      fanOutToPlatformAdmins(
+        t.adminNewRequest({
+          applicantName: req.user.name,
+          applicantEmail: req.user.email,
+          shopName,
+          kind: req.kind,
+          reviewUrl: reviewUrlFor(req.shopId),
+        })
+      ),
+    ]);
+  } catch (err) {
+    console.error("[notify] notifyShopAdminRequestFiled failed", err);
   }
 }
 

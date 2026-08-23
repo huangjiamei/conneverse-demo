@@ -71,6 +71,11 @@ export async function sendEmail({
       );
       return { ok: false, reason: error.message ?? "Resend rejected the send" };
     }
+    // 成功也记一行 —— 发信是外部副作用,「到底发没发、发给了谁」出问题时
+    // 只能靠日志回溯;Resend 那边的列表接口用发信专用 key 是读不到的。
+    console.log(
+      `[email] sent "${subject}" → ${recipients.join(", ")} (${data?.id ?? "no id"})`
+    );
     return { ok: true, id: data?.id ?? null };
   } catch (err) {
     // 网络中断 / DNS / 超时
