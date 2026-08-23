@@ -1,6 +1,10 @@
 /**
  * 发信层 —— Resend,唯一出口。
  *
+ * 自测别真发信: 设 EMAIL_TRANSPORT=memory (仅非 production 生效),这一层就不出网,
+ * 改成把 { to, subject } 记进内存,用 outbox() / clearOutbox() 断言。日志行和真实
+ * 投递一模一样,所以靠日志计数的测试也不用改。
+ *
  * 三条硬规则,调用方不用再操心:
  *   1. 收件人只能由服务端从库/会话取出后传进来,绝不接受前端提交的地址。
  *   2. 发不出去也绝不抛 —— 注册/审核这些主流程不能因为邮件挂掉而回滚。
@@ -14,6 +18,40 @@
 import { Resend } from "resend";
 
 let cached: Resend | null = null;
+
+// ═══════════════════════════════════════════════════════════════
+//  内存投递 —— 自测专用
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 一封"发出去"的信 —— 内存模式下只记这三样,足够断言"发了几封、给谁、什么主题"。
+ */
+export type SentMail = { to: string[]; subject: string; at: Date };
+
+const mailbox: SentMail[] = [];
+
+/** 自测读这里做断言 */
+export function outbox(): readonly SentMail[] {
+  return mailbox;
+}
+
+/** 自测在每个用例开头清空 */
+export function clearOutbox(): void {
+  mailbox.length = 0;
+}
+
+/**
+ * 是否走内存投递。
+ *
+ * 显式 opt-in (EMAIL_TRANSPORT=memory),而且**在生产里一律无效** —— 免得哪天
+ * 环境变量抄串了,线上安安静静一封信都不发,还全都"成功"。
+ */
+function useMemoryTransport(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.EMAIL_TRANSPORT === "memory"
+  );
+}
 
 function client(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -39,6 +77,22 @@ export async function sendEmail({
   subject: string;
   html: string;
 }): Promise<SendEmailResult> {
+  const recipientsForMemory = (Array.isArray(to) ? to : [to]).filter(Boolean);
+  if (useMemoryTransport()) {
+    // 不出网:自测跑多少遍都不烧 Resend 的每日额度,也不会真的打扰任何人。
+    // 日志格式和真实投递完全一致,靠 [email] sent 行断言的测试不用改。
+    mailbox.push({
+      to: recipientsForMemory,
+      subject,
+      at: new Date(),
+    });
+    const id = `memory-${mailbox.length}`;
+    console.log(
+      `[email] sent "${subject}" → ${recipientsForMemory.join(", ")} (${id})`
+    );
+    return { ok: true, id };
+  }
+
   const from = process.env.EMAIL_FROM;
   const resend = client();
 
