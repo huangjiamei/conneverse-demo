@@ -130,6 +130,7 @@ export async function sendVerificationEmail(userId: string): Promise<boolean> {
 
 // ═══════════════════════════════════════════════════════════════
 //  邮箱验证通过 → applicantReceived (用户) + adminNewRequest (平台管理员)
+//                + shopAdminNewMember (本店店铺管理员)
 // ═══════════════════════════════════════════════════════════════
 
 /** 只在 consumeEmailVerificationToken 返回 VERIFIED 那一次调用 */
@@ -168,9 +169,66 @@ export async function notifyEmailVerified(userId: string): Promise<void> {
     await Promise.all([
       sendEmail({ to: user.email, ...applicant }),
       fanOutToPlatformAdmins(forAdmins),
+      // 真正要审这个人的是店铺管理员 —— 他自己内部再判该不该发
+      notifyShopAdminOfNewMember(userId),
     ]);
   } catch (err) {
     console.error("[notify] notifyEmailVerified failed", err);
+  }
+}
+
+/**
+ * 有新成员待审 → 通知这家店的店铺管理员。
+ *
+ * 员工加入店铺的审核方是**店铺管理员** (reviewUser 允许 SHOP_ADMIN 审本店的人,
+ * 界面在 /shop 的 Awaiting approval);平台管理员只是"这家店没有管理员"时的兜底。
+ * 在此之前只有平台管理员收得到信,真正要动手的那个人反而不知道 —— 补上。
+ *
+ * 收件人取 Shop.adminUserId 指向的那个 User 的邮箱 —— 和授权判定用的是同一个
+ * 唯一真相,不会给一个已经被 REPLACE 顶掉的旧管理员发信。
+ *
+ * 触发时机跟着"注册进入待审核"走,也就是邮箱验证通过那一刻,所以:
+ *   · 未验证 → 不发 (验证前不算进入待审核)
+ *   · 验证通过 → 发一封,由 consumeEmailVerificationToken 的 CAS 保证只有一次
+ * 这家店没有管理员时静默跳过 —— 那种情况本来就该由平台管理员兜底审。
+ */
+async function notifyShopAdminOfNewMember(userId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+        emailVerified: true,
+        shop: {
+          select: {
+            id: true,
+            name: true,
+            adminUser: { select: { id: true, email: true } },
+          },
+        },
+      },
+    });
+    if (!user) return;
+    if (!user.emailVerified) return; // 还没进入待审核
+    if (user.status !== "PENDING") return; // 没什么可审的
+    const admin = user.shop?.adminUser;
+    if (!admin) return; // 该店无管理员 → 平台管理员那条兜底通知已经发了
+    if (admin.id === user.id) return; // 理论上不会,自己审自己没意义
+
+    await sendEmail({
+      to: admin.email,
+      ...t.shopAdminNewMember({
+        applicantName: user.name,
+        applicantEmail: user.email,
+        shopName: user.shop?.name ?? null,
+        reviewUrl: `${appUrl()}/shop`,
+      }),
+    });
+  } catch (err) {
+    console.error("[notify] notifyShopAdminOfNewMember failed", err);
   }
 }
 

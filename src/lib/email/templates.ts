@@ -231,6 +231,61 @@ export function adminNewRequest({
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  3b. 有人申请加入店铺:告诉这家店的店铺管理员
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 收件人是店主/店铺管理员,不是平台团队 —— 措辞和落地页都不一样:
+ * 他审的是"要不要让这个人进我的店",页面在 My Shop。
+ */
+export function shopAdminNewMember({
+  applicantName,
+  applicantEmail,
+  shopName,
+  reviewUrl,
+}: {
+  applicantName: string | null;
+  applicantEmail: string;
+  shopName: string | null;
+  reviewUrl: string;
+}): EmailContent {
+  const who = applicantName?.trim() || applicantEmail;
+  const shop = shopName ? escapeHtml(shopName) : "your shop";
+  const rows: [string, string][] = [
+    ["Name", applicantName?.trim() || "—"],
+    ["Email", applicantEmail],
+  ];
+  const table = `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0;font-size:14px;">
+      ${rows
+        .map(
+          ([k, v]) => `<tr>
+        <td style="padding:4px 16px 4px 0;color:${MUTED};white-space:nowrap;">${escapeHtml(k)}</td>
+        <td style="padding:4px 0;color:${NAVY};">${escapeHtml(v)}</td>
+      </tr>`
+        )
+        .join("")}
+    </table>`;
+
+  return {
+    subject: `New member awaiting your approval — ${who}`,
+    html: layout(
+      `Someone asked to join ${shopName ? escapeHtml(shopName) : "your shop"}`,
+      [
+        p(
+          `They registered for PartHand under <strong>${shop}</strong> and verified their email address. You decide whether they get access.`
+        ),
+        table,
+        button(reviewUrl, "Review member"),
+        p(
+          `<span style="color:${MUTED};font-size:13px;">If you don't recognise them, reject the request — they won't be able to sign in.</span>`
+        ),
+      ].join("")
+    ),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  4. 审核通过
 // ═══════════════════════════════════════════════════════════════
 
