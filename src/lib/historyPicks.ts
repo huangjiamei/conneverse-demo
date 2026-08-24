@@ -38,6 +38,8 @@ type RawFields = {
   shippingCost: string | null;
   deliveryMin: string | null;
   deliveryMax: string | null;
+  /** 该次搜索的时间 —— 到货天数相对它算,不能用「现在」 */
+  searchedAt: Date | null;
 };
 
 function shortTitle(title: string, n = 42): string {
@@ -81,6 +83,7 @@ export async function loadPresetPicks(
     Array<{ matchSearchId: string; itemId: string } & RawFields>
   >`
     SELECT ms.id                                            AS "matchSearchId",
+           ms."createdAt"                                   AS "searchedAt",
            elem->>'item_id'                                 AS "itemId",
            COALESCE(elem->'compatibility'->>'Brand',
                     elem->'compatibility'->>'Make')         AS "brand",
@@ -109,7 +112,11 @@ export async function loadPresetPicks(
       price: `$${(price + (shipKnown ? ship : 0)).toFixed(2)}`,
       priceNote: shipKnown ? null : "+ shipping",
       delivery: opts.withDelivery
-        ? formatDeliveryRange(raw?.deliveryMin, raw?.deliveryMax)
+        ? formatDeliveryRange(
+            raw?.deliveryMin,
+            raw?.deliveryMax,
+            raw?.searchedAt ?? null
+          )
         : null,
       score: opts.withScore && w.total != null ? Math.round(w.total) : null,
     });

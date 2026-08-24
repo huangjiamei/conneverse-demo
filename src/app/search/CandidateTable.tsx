@@ -109,9 +109,12 @@ function PickBadges({
 export function CandidateTable({
   candidates,
   currentPreset,
+  searchedAt,
 }: {
   candidates: Candidate[];
   currentPreset: string;
+  /** 该次搜索的 createdAt —— 到货天数相对它算,不能用「现在」 */
+  searchedAt: string | Date | null;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -178,7 +181,8 @@ export function CandidateTable({
             const sellerCount = ef.seller_feedback_count ?? null;
             const delivery = formatDeliveryRange(
               ef.delivery_min_date,
-              ef.delivery_max_date
+              ef.delivery_max_date,
+              searchedAt
             );
             const warranty = formatWarranty(ef.warranty_raw);
             // 运费: 用于 PRICE 列副行, 让展示价与排序用的 landed (price+shipping) 一致。

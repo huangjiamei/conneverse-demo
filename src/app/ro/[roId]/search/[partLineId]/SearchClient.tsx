@@ -370,7 +370,11 @@ export default function SearchClient({
           ) : (
             <div className="grid gap-3 auto-rows-fr">
               {verified.map((c) => (
-                <CandidateCard key={c.id} candidate={c} />
+                <CandidateCard
+                  key={c.id}
+                  candidate={c}
+                  searchedAt={result.createdAt}
+                />
               ))}
             </div>
           )}
@@ -390,7 +394,11 @@ export default function SearchClient({
               {showFiltered && (
                 <div className="mt-2 grid gap-3 auto-rows-fr">
                   {others.map((c) => (
-                    <CandidateCard key={c.id} candidate={c} />
+                    <CandidateCard
+                  key={c.id}
+                  candidate={c}
+                  searchedAt={result.createdAt}
+                />
                   ))}
                 </div>
               )}

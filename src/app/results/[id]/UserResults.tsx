@@ -66,7 +66,10 @@ function readableReturns(c: Candidate): string {
  *
  * quotedPrice 为 null = 运费算不出 → 报不了全包价 → 不给即时下单 (B3)。
  */
-function cardPrice(c: Candidate): {
+function cardPrice(
+  c: Candidate,
+  searchedAt: string | Date | null
+): {
   main: string;
   sub: { text: string; tone: "muted" | "amber" } | null;
 } {
@@ -74,7 +77,11 @@ function cardPrice(c: Candidate): {
     return { main: "—", sub: { text: "Quote needed", tone: "amber" } };
   }
   const ef = c.enrichedFields || {};
-  const delivery = formatDeliveryRange(ef.delivery_min_date, ef.delivery_max_date);
+  const delivery = formatDeliveryRange(
+    ef.delivery_min_date,
+    ef.delivery_max_date,
+    searchedAt
+  );
   return {
     main: `$${c.quotedPrice}`,
     sub: {
@@ -172,6 +179,7 @@ function ExpandedCard({
   ordering,
   partLineId,
   defaultQuantity,
+  searchedAt,
 }: {
   candidate: Candidate;
   badge?: HeroBadge;
@@ -179,8 +187,10 @@ function ExpandedCard({
   ordering: OrderingContext;
   partLineId: string | null;
   defaultQuantity: number;
+  /** 该次搜索的 createdAt —— 到货天数相对它算,不能用「现在」 */
+  searchedAt: string | Date | null;
 }) {
-  const px = cardPrice(candidate);
+  const px = cardPrice(candidate, searchedAt);
   const compat = candidate.compatibility
     ? Object.entries(candidate.compatibility).filter(([k]) => k !== "categoryPath")
     : [];
@@ -290,18 +300,22 @@ function AlternateRow({
   ordering,
   partLineId,
   defaultQuantity,
+  searchedAt,
 }: {
   candidate: Candidate;
   onZoom: (gallery: string[], index: number) => void;
   ordering: OrderingContext;
   partLineId: string | null;
   defaultQuantity: number;
+  /** 该次搜索的 createdAt —— 到货天数相对它算,不能用「现在」 */
+  searchedAt: string | Date | null;
 }) {
   const [open, setOpen] = useState(false);
   const id = mainIdentifier(candidate);
   const delivery = formatDeliveryRange(
     candidate.enrichedFields?.delivery_min_date,
-    candidate.enrichedFields?.delivery_max_date
+    candidate.enrichedFields?.delivery_max_date,
+    searchedAt
   );
   const rp = rowPrice(candidate);
 
@@ -357,6 +371,7 @@ function AlternateRow({
             ordering={ordering}
             partLineId={partLineId}
             defaultQuantity={defaultQuantity}
+            searchedAt={searchedAt}
           />
         </div>
       )}
@@ -557,10 +572,19 @@ function Lightbox({
 
 // ---- top level ----------------------------------------------
 
+/**
+ * lib/userResultsData.ts 里那个 UserResultsContext 的窄化副本。
+ *
+ * 不能直接 import 那个 —— 它所在的文件拉了 prisma,client 组件 import 会把
+ * 整个 Prisma Client 带进浏览器包。两边字段有出入是允许的 (结构化类型),
+ * 但**这里用到的每个字段那边都必须有**,否则运行时是 undefined。
+ */
 export type UserResultsContext = {
   part: string;
   vehicle: string;
   category: string | null;
+  /** 该次搜索的时间 (ISO) —— 到货天数相对它算,不能用「现在」 */
+  createdAt: string;
 };
 
 // SourcingProvider 由 page 持有 (QuoteBuilder 要在同一个 provider 里),
@@ -603,6 +627,7 @@ export default function UserResults({
             ordering={ordering}
             partLineId={partLineId}
             defaultQuantity={defaultQuantity}
+            searchedAt={context.createdAt}
           />
         ))}
       </div>
@@ -621,6 +646,7 @@ export default function UserResults({
                 ordering={ordering}
                 partLineId={partLineId}
                 defaultQuantity={defaultQuantity}
+                searchedAt={context.createdAt}
               />
             ))}
           </div>

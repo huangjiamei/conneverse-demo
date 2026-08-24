@@ -182,7 +182,11 @@ export default async function HistoryDetailPage({
             No verified matches in this search.
           </div>
         ) : (
-          <CandidateTable candidates={verified} currentPreset={HISTORY_PRESET} />
+          <CandidateTable
+            candidates={verified}
+            currentPreset={HISTORY_PRESET}
+            searchedAt={search.createdAt}
+          />
         )}
 
         {others.length > 0 && (
@@ -193,7 +197,11 @@ export default async function HistoryDetailPage({
                 (uncertain / rejected)
               </span>
             </div>
-            <CandidateTable candidates={others} currentPreset={HISTORY_PRESET} />
+            <CandidateTable
+              candidates={others}
+              currentPreset={HISTORY_PRESET}
+              searchedAt={search.createdAt}
+            />
           </div>
         )}
       </div>

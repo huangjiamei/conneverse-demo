@@ -209,7 +209,14 @@ export function humanizeGateReason(
 // Card
 // ============================================================
 
-export function CandidateCard({ candidate }: { candidate: Candidate }) {
+export function CandidateCard({
+  candidate,
+  searchedAt,
+}: {
+  candidate: Candidate;
+  /** 该次搜索的 createdAt —— 到货天数相对它算,不能用「现在」 */
+  searchedAt: string | Date | null;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const isVerifiedMatch = candidate.candidateLabel === 1;
@@ -225,7 +232,11 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
       ? Number(ef.seller_feedback_pct)
       : null;
   const sellerCount = ef.seller_feedback_count ?? null;
-  const delivery = formatDeliveryRange(ef.delivery_min_date, ef.delivery_max_date);
+  const delivery = formatDeliveryRange(
+    ef.delivery_min_date,
+    ef.delivery_max_date,
+    searchedAt
+  );
   const warranty = formatWarranty(ef.warranty_raw);
   const country = ef.country ?? null;
 
