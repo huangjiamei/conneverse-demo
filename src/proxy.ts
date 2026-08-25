@@ -6,9 +6,9 @@
  * 官方明确说 Proxy 不该承担完整鉴权,页面/API 里还有第二道 requireLiveSession()。
  *
  * 规则 (采用 §5 方案 A: 未批准的用户根本拿不到会话):
- *   无会话 + 公开路径      → 放行
- *   无会话 + 其它          → 跳 / (登录)
- *   有会话 + / 或 /register → 跳各自 landing
+ *   无会话 + 公开路径           → 放行
+ *   无会话 + 其它               → 跳 /login
+ *   有会话 + /login 或 /register → 跳各自 landing
  *   有会话 + 越权          → 跳各自 landing
  */
 
@@ -19,6 +19,7 @@ import {
   canAccess,
   isPublicPath,
   landingPath,
+  PATHNAME_HEADER,
   shouldRedirectAwayFrom,
 } from "@/lib/auth/routes";
 
@@ -32,11 +33,11 @@ export async function proxy(req: NextRequest) {
   const isApi = pathname.startsWith("/api/");
 
   if (!session) {
-    if (isPublicPath(pathname)) return NextResponse.next();
+    if (isPublicPath(pathname)) return pass(req);
     if (isApi) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-    return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
   const landing = landingPath(session);
@@ -50,7 +51,23 @@ export async function proxy(req: NextRequest) {
     }
     return NextResponse.redirect(new URL(landing, req.url));
   }
-  return NextResponse.next();
+  return pass(req);
+}
+
+/**
+ * 放行,并把当前 pathname 作为请求头透传给下游。
+ *
+ * root layout 需要知道"这次渲染的是哪个路由"才能决定要不要挂 AppHeader
+ * (落地页 /home 自带深色导航,再叠一条 navy app bar 就废了)。App Router 不给
+ * layout 提供 pathname,官方给的办法就是在 proxy 里塞请求头。
+ *
+ * 注意是 NextResponse.next({ request: { headers } }) —— 写成
+ * NextResponse.next({ headers }) 会变成【响应】头,发给浏览器而不是下游。
+ */
+function pass(req: NextRequest) {
+  const headers = new Headers(req.headers);
+  headers.set(PATHNAME_HEADER, req.nextUrl.pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

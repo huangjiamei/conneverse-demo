@@ -74,7 +74,7 @@ export default async function PendingPage({
       <AuthCard
         title="Check your inbox"
         footer={
-          <Link href="/" className="font-medium text-[#00B4A6] hover:underline">
+          <Link href="/login" className="font-medium text-[#00B4A6] hover:underline">
             ← Back to sign in
           </Link>
         }
@@ -115,7 +115,7 @@ export default async function PendingPage({
     <AuthCard
       title={copy.title}
       footer={
-        <Link href="/" className="font-medium text-[#00B4A6] hover:underline">
+        <Link href="/login" className="font-medium text-[#00B4A6] hover:underline">
           ← Back to sign in
         </Link>
       }

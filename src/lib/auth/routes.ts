@@ -1,12 +1,28 @@
 /**
  * 路由策略 —— proxy.ts 和页面共用同一份规则,避免两处判断打架。
  *
- * 公开: / (login) · /register · /pending · /verify-email · /forgot-password ·
- * /reset-password · 以及它们要打的几个 API。
+ * 公开: / (纯分流) · /home (落地页) · /login · /register · /pending ·
+ * /verify-email · /forgot-password · /reset-password · 以及它们要打的几个 API。
  * 其余一律要 APPROVED 会话;/admin/** 额外要 PLATFORM_ADMIN。
  */
 
 import type { Session } from "./types";
+
+/**
+ * proxy 把当前 pathname 塞进这个请求头,root layout 读它决定要不要挂 AppHeader。
+ * App Router 不给 layout 提供 pathname,这是官方推荐的绕法。
+ */
+export const PATHNAME_HEADER = "x-pathname";
+
+/** 自带整套导航、不该再叠 app header 的路由 */
+const CHROMELESS_PREFIXES = ["/home"];
+
+export function isChromeless(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return CHROMELESS_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
+}
 
 /**
  * 登录/注册/待审核/邮箱验证 —— 未登录可访问。
@@ -15,7 +31,11 @@ import type { Session } from "./types";
  * 挡在这里等于验证流程永远走不完。
  */
 const PUBLIC_PAGES = new Set([
+  // 根路径只做分流: 有会话去各自 landing, 没有去 /home
   "/",
+  // 市场落地页 —— 未登录的人本来就是它的目标读者
+  "/home",
+  "/login",
   "/register",
   "/pending",
   "/verify-email",
@@ -40,6 +60,8 @@ const PUBLIC_APIS = [
   "/api/auth/resend-verification",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  // 落地页的 Book a demo 表单 —— 访客当然没有会话
+  "/api/demo-request",
   "/api/shops",
   "/api/stripe/webhook",
 ];
@@ -100,9 +122,15 @@ export function canAccess(session: Session, pathname: string): boolean {
   return true;
 }
 
-/** 已登录还去 / 或 /register → 弹回各自 landing */
+/**
+ * 已登录还去 /login 或 /register → 弹回各自 landing。
+ *
+ * 刻意不含 "/" 和 "/home": 根路径自己会按会话分流 (见 app/page.tsx),
+ * 落地页则是任何人都该看得到的营销页 —— 登录用户点自家 logo 回首页,
+ * 不该被踢走。
+ */
 export function shouldRedirectAwayFrom(pathname: string): boolean {
-  return pathname === "/" || pathname === "/register";
+  return pathname === "/login" || pathname === "/register";
 }
 
 export const ROLE_LABEL: Record<Session["role"], string> = {

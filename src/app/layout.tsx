@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { AppHeader } from "@/components/AppHeader";
+import { newsreader, spaceMono } from "@/lib/fonts";
 import { getLiveSession } from "@/lib/auth/liveSession";
+import { isChromeless, PATHNAME_HEADER } from "@/lib/auth/routes";
 
 export const metadata: Metadata = {
   title: "PartHand — Trusted Parts Agent",
@@ -19,13 +22,22 @@ export default async function RootLayout({
   // REPLACE 顶掉的人不该还看得见 Team 入口。
   const session = await getLiveSession();
 
+  // 落地页自带整套深色导航 —— 再挂一条 navy app bar 会变成两条头。
+  // pathname 由 proxy.ts 通过请求头带进来 (layout 拿不到路由信息)。
+  const pathname = (await headers()).get(PATHNAME_HEADER);
+  const chromeless = isChromeless(pathname);
+
   // suppressHydrationWarning: browser extensions (wallets, Grammarly,
   // dark-mode tools) inject attributes onto <html> before React hydrates.
   // Suppresses one level only — mismatches inside the tree still surface.
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`h-full antialiased ${newsreader.variable} ${spaceMono.variable}`}
+      suppressHydrationWarning
+    >
       <body className="min-h-full flex flex-col bg-[#F7F8FA] text-[#1A1A2E]">
-        <AppHeader session={session} />
+        {!chromeless && <AppHeader session={session} />}
         {children}
       </body>
     </html>

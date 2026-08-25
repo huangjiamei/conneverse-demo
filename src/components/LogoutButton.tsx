@@ -17,7 +17,7 @@ export function LogoutButton() {
     setPending(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.replace("/");
+      router.replace("/login");
       router.refresh();
     } finally {
       setPending(false);

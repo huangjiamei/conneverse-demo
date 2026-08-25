@@ -89,7 +89,7 @@ export async function getLiveSession(): Promise<LiveSession | null> {
 /** 页面里用:按库里的现状要求已登录 */
 export async function requireLiveSession(): Promise<LiveSession> {
   const session = await getLiveSession();
-  if (!session) redirect("/");
+  if (!session) redirect("/login");
   return session;
 }
 

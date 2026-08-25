@@ -318,6 +318,61 @@ export function passwordReset({
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  3d. 落地页 "Book a demo" 表单
+// ═══════════════════════════════════════════════════════════════
+
+export function demoRequest({
+  name,
+  shop,
+  email,
+  phone,
+  message,
+}: {
+  name: string;
+  shop: string | null;
+  email: string;
+  phone: string | null;
+  message: string | null;
+}): EmailContent {
+  const rows: [string, string][] = [
+    ["Name", name],
+    ["Shop", shop || "—"],
+    ["Email", email],
+    ["Phone", phone || "—"],
+  ];
+  const table = `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0;font-size:14px;">
+      ${rows
+        .map(
+          ([k, v]) => `<tr>
+        <td style="padding:4px 16px 4px 0;color:${MUTED};white-space:nowrap;">${escapeHtml(k)}</td>
+        <td style="padding:4px 0;color:${NAVY};">${escapeHtml(v)}</td>
+      </tr>`
+        )
+        .join("")}
+    </table>`;
+
+  return {
+    subject: `Demo request — ${name}${shop ? ` (${shop})` : ""}`,
+    html: layout(
+      "New demo request",
+      [
+        p("Someone asked for a demo from the PartHand landing page:"),
+        table,
+        message?.trim()
+          ? p(
+              `<span style="color:${MUTED};">They wrote:</span><br />${escapeHtml(message.trim()).replace(/\n/g, "<br />")}`
+            )
+          : "",
+        p(
+          `<span style="color:${MUTED};font-size:13px;">Reply straight to ${escapeHtml(email)} to set up a time.</span>`
+        ),
+      ].join("")
+    ),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  4. 审核通过
 // ═══════════════════════════════════════════════════════════════
 

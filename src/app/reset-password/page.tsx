@@ -46,7 +46,7 @@ export default async function ResetPasswordPage({
       <AuthCard
         title="This link didn't work"
         footer={
-          <Link href="/" className="font-medium text-[#00B4A6] hover:underline">
+          <Link href="/login" className="font-medium text-[#00B4A6] hover:underline">
             ← Back to sign in
           </Link>
         }
@@ -75,7 +75,7 @@ export default async function ResetPasswordPage({
       title="Choose a new password"
       subtitle="Pick something you haven't used elsewhere."
       footer={
-        <Link href="/" className="font-medium text-[#00B4A6] hover:underline">
+        <Link href="/login" className="font-medium text-[#00B4A6] hover:underline">
           ← Back to sign in
         </Link>
       }

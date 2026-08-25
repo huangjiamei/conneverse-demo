@@ -80,7 +80,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         </div>
         <button
           type="button"
-          onClick={() => router.replace("/")}
+          onClick={() => router.replace("/login")}
           className="w-full rounded-lg bg-[#00B4A6] py-2.5 text-sm font-semibold text-white transition hover:bg-[#00A396]"
         >
           Go to sign in

@@ -111,7 +111,7 @@ function Shell({
     <AuthCard
       title={title}
       footer={
-        <Link href="/" className="font-medium text-[#00B4A6] hover:underline">
+        <Link href="/login" className="font-medium text-[#00B4A6] hover:underline">
           ← Back to sign in
         </Link>
       }

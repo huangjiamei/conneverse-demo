@@ -133,6 +133,50 @@ export async function sendVerificationEmail(userId: string): Promise<boolean> {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  落地页 "Book a demo" → demoRequest (全体平台管理员)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 把一条 demo 申请扇给每一个平台管理员 —— 和 adminNewRequest 走完全同一套
+ * 收件人逻辑 (Admin 表全员,一人一封;一个都没有时才退到 ADMIN_NOTIFY_EMAIL)。
+ *
+ * 刻意不写死单个地址: 线索只落到一个人的收件箱里,那个人休假就没人跟进。
+ *
+ * TODO: demo@parthand.com 收件箱配好之后,这里换成那个专用地址 —— 到时候
+ * 把 fanOutToPlatformAdmins 换成直接 sendEmail 到那一个地址即可,调用方不用动。
+ *
+ * @returns 至少发出去一封才算 true;调用方据此决定回 200 还是 502
+ */
+export async function notifyDemoRequest(input: {
+  name: string;
+  shop: string | null;
+  email: string;
+  phone: string | null;
+  message: string | null;
+}): Promise<boolean> {
+  try {
+    const recipients = await platformAdminRecipients();
+    if (recipients.length === 0) {
+      console.error(
+        "[notify] demo request dropped — no platform-admin recipient (add an Admin row or set ADMIN_NOTIFY_EMAIL)",
+        { name: input.name, email: input.email }
+      );
+      return false;
+    }
+
+    const content = t.demoRequest(input);
+    const results = await Promise.all(
+      recipients.map((to) => sendEmail({ to, ...content }))
+    );
+    // 部分失败也算收到了 —— 线索已经到了某个人手上,不该让访客重复提交
+    return results.some((r) => r.ok);
+  } catch (err) {
+    console.error("[notify] notifyDemoRequest failed", err);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  忘记密码 → passwordReset
 // ═══════════════════════════════════════════════════════════════
 
@@ -366,7 +410,7 @@ export async function notifyApproved(userId: string): Promise<void> {
       name: user.name,
       shopName: user.shop?.name ?? null,
       isShopAdmin: user.adminOf != null,
-      loginUrl: `${appUrl()}/`,
+      loginUrl: `${appUrl()}/login`,
     });
     await sendEmail({ to: user.email, subject, html });
   } catch (err) {

@@ -1,50 +1,21 @@
 /**
- * / —— 登录页 (= 首页)。
+ * / —— 站点根路径,本身不渲染内容,只决定往哪送。
  *
- * 已登录的话 proxy 就把人弹到各自 landing 了;这里再挡一次,防止
- * proxy matcher 漏配或直接渲染时绕过。
+ *   已登录 → 各自的 landing (/search;未批准的走 /pending)
+ *   未登录 → 市场落地页 /home
+ *
+ * 落地页刻意留在 /home 而不是搬到这里:它是独立的一屏营销页,
+ * 有自己的 metadata 和不挂 AppHeader 的规则 (见 lib/auth/routes 的 isChromeless),
+ * 让 / 保持"纯分流"这一件事,比把两套逻辑塞进同一个文件干净。
  */
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthCard } from "@/components/auth/AuthCard";
 import { getLiveSession } from "@/lib/auth/liveSession";
 import { landingPath } from "@/lib/auth/routes";
-import LoginForm from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function RootPage() {
   const session = await getLiveSession();
-  if (session) redirect(landingPath(session));
-
-  return (
-    <AuthCard
-      title="Sign in"
-      subtitle="Access quality-verified parts for your shop."
-      footer={
-        <div className="space-y-2">
-          <div>
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-[#00B4A6] hover:underline"
-            >
-              Create one
-            </Link>
-          </div>
-          <div>
-            <Link
-              href="/forgot-password"
-              className="font-medium text-[#00B4A6] hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </div>
-        </div>
-      }
-    >
-      <LoginForm />
-    </AuthCard>
-  );
+  redirect(session ? landingPath(session) : "/home");
 }

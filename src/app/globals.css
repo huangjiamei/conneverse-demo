@@ -14,6 +14,38 @@
   --color-amber: var(--amber);
   --color-body: var(--body-bg);
   --color-dark: var(--text-dark);
+
+  /* ── 落地页 (/home) 调色板 ────────────────────────────────────────
+     取自 docs/index.html 的 :root 变量,原值照搬。刻意和上面那组 app 色
+     (navy/teal/amber) 分开命名 —— 落地页是另一套视觉语言,不该互相污染。 */
+  --color-ink: #0f100c;
+  --color-ink-2: #15160f;
+  --color-paper: #f4f3ee;
+  --color-paper-2: #ffffff;
+  --color-text-ink: #191a14;
+  --color-text-soft: #4b4c44;
+  --color-text-light: #efeee7;
+  --color-text-light-soft: #b7b8ad;
+  --color-muted: #8a8b7f;
+  --color-muted-dark: #71756a;
+  --color-line: #e4e3da;
+  --color-line-dark: #26281f;
+  --color-leaf: #a6d65e;
+  --color-leaf-deep: #8bbf46;
+  --color-leaf-on-dark: #a9d861;
+  --color-card-dark: #16170f;
+
+  /* next/font 注入的变量 (见 src/lib/fonts.ts);数字刻意走系统 Helvetica 栈 */
+  --font-serif-ph: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-mono-ph: var(--font-space-mono), ui-monospace, "SFMono-Regular", Menlo,
+    monospace;
+  --font-num-ph: "Helvetica Neue", Arial, "Segoe UI", sans-serif;
+
+  /* 原稿是 desktop-first + max-width:960/560 覆盖;Tailwind 是 mobile-first,
+     所以反过来:基础样式 = 窄屏,mdx/smx 往上才是宽屏。
+     mdx = 961px (原 ≤960 的分界), smx = 561px (原 ≤560 的分界)。 */
+  --breakpoint-smx: 35.0625rem;
+  --breakpoint-mdx: 60.0625rem;
 }
 
 body {
