@@ -57,7 +57,7 @@ export function Nav() {
           <Btn
             variant="light"
             onClick={open}
-            className="px-4 py-[9px] text-[14px] mdx:px-5 mdx:text-[15px]"
+            className="!px-4 !py-[6px] text-[14px] mdx:!px-5 mdx:text-[15px]"
           >
             Book a demo
           </Btn>
