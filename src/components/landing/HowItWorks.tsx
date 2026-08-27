@@ -10,8 +10,8 @@ const STEPS = [
   },
   {
     no: "02",
-    title: "See every option at once",
-    body: "PartHand searches OEM, aftermarket, recycled, and refurbished channels together, then ranks what comes back by fitment confidence, condition, landed price, and arrival date.",
+    title: "See the two that matter",
+    body: "PartHand searches WDs, OEMs, aftermarket, recyclers, and our pre-vetted suppliers together. But you don't scroll a wall of listings — you see the fastest pick and the cheapest pick, and every option carries our full guarantee: fitment, quality, price locked, returns covered.",
   },
   {
     no: "03",

@@ -63,9 +63,10 @@ export function Product() {
               Built for the person holding twelve tabs open
             </h2>
             <p className="max-w-[34em] font-serif-ph text-[18px] leading-[1.6] text-text-soft">
-              Sourcing, approvals, order status, and returns live on one board.
-              Everyone touching the job sees the same state, so nobody calls around
-              for an update.
+              Sourcing, approvals, order tracking, and returns live on one board.
+              Every order updates in real time — so you&apos;re not calling suppliers
+              for status, and a delay shows up the moment it happens, not when the
+              car&apos;s already on the lift.
             </p>
           </div>
           <div className="flex flex-col gap-4 pt-2">

@@ -19,16 +19,12 @@ const ITEMS = [
     a: "Parts are matched against as-built vehicle data rather than a generic year-make-model lookup, and each option carries a fitment confidence you can see before ordering. If a protected line doesn't fit, the return and replacement are handled as part of the order.",
   },
   {
-    q: "Which channels does PartHand search?",
-    a: "OEM dealer networks, aftermarket distributors, recycled and refurbished suppliers, and your own preferred vendors — searched together and ranked side by side so you compare landed cost and arrival across all of them at once.",
-  },
-  {
     q: "What happens when a part arrives wrong or damaged?",
     a: "Flag it on the order and PartHand owns the correction: sourcing the replacement, arranging the return, and tracking the credit through to your account — so your technician isn't chasing suppliers.",
   },
   {
     q: "Does this replace my supplier relationships?",
-    a: "No. PartHand sits on top of the suppliers you already use and lets you add new channels alongside them. You keep your accounts and terms; we just make them searchable in one place.",
+    a: "No — you keep your suppliers and your terms. PartHand adds to them: vetted, qualified suppliers your shop couldn't reach before, searchable alongside your preferred vendors — with fitment, quality, and returns on us.",
   },
   {
     q: "How long does it take to get running?",
