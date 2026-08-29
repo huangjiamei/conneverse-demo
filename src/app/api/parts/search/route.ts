@@ -1,16 +1,26 @@
 /**
- * GET /api/parts/search?q=brake&categoryId=3&limit=10
+ * GET /api/parts/search?q=brake&displayCategoryId=2&limit=10
  *
  * PcdbPart 的 fuzzy 搜索 (pg_trgm)。给 /search autocomplete 用。
- *   - q         必填, 搜索词
- *   - categoryId 可选, 只搜该大类下的 Part
- *   - limit     默认 10 (上限 25)
+ *   - q                必填, 搜索词
+ *   - displayCategoryId 可选, 只搜该显示层一级 (DisplayCategory) 下的 Part
+ *   - subCategoryId     可选, 只搜该子类下的 Part
+ *   - limit            默认 10 (上限 25)
  *
- * 排序: similarity(name, q) DESC (trgm 相似度), 同分按名称。
- * 返回: [{ partId, partName, subCategoryId, subCategoryName, categoryId, categoryName }]
+ * 显示层映射 (与一级下拉同源):
+ *   结果经 CategoryDisplayMap 内连 DisplayCategory —— displayCategoryId=NULL 的
+ *   隐藏一级 (18/23/29/44/45) 自然被 INNER JOIN 剔除。所以只挂在隐藏一级下的零件
+ *   (如 "Brake Lathe" 只在 18 下) 不会出现在结果里; 结果行的一级名显示的是
+ *   DisplayCategory 名 (如 "Brakes"), 不是 PcdbCategory 原名。一个零件若同时有
+ *   可见和隐藏的家, 只留可见的那行 (JOIN 天然过滤)。
  *
- * 注: 每个 PcdbPart 在 PcdbPartCategory 里恰好一行 (40464=40464), 所以 join
- * 后一个 part 一行, 不需要额外去重。
+ * 排序: 连续核心短语优先, 小配件降权, 短名优先, 再按名称。
+ * 返回: [{ partId, partName, subCategoryId, subCategoryName,
+ *          pcdbCategoryId, displayCategoryId, displayCategoryName }]
+ *   - pcdbCategoryId / subCategoryId 是原始 PCdb id: 选中后查 eBay / 落库追踪用,
+ *     不受显示层改名合并影响 (搜索匹配逻辑不变)。
+ *
+ * 注: 现数据里每个 PcdbPart 在 PcdbPartCategory 里恰好一行, join 后一个可见家一行。
  */
 
 import { NextResponse } from "next/server";
@@ -21,22 +31,27 @@ type Row = {
   partName: string;
   subCategoryId: number;
   subCategoryName: string;
-  categoryId: number;
-  categoryName: string;
+  pcdbCategoryId: number;
+  displayCategoryId: number;
+  displayCategoryName: string;
 };
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const q = (sp.get("q") ?? "").trim();
-  const categoryIdRaw = sp.get("categoryId");
-  const categoryId = categoryIdRaw != null ? Number(categoryIdRaw) : null;
+  const displayCategoryIdRaw = sp.get("displayCategoryId");
+  const displayCategoryId =
+    displayCategoryIdRaw != null ? Number(displayCategoryIdRaw) : null;
   const subCategoryIdRaw = sp.get("subCategoryId");
   const subCategoryId = subCategoryIdRaw != null ? Number(subCategoryIdRaw) : null;
   const limit = Math.min(25, Math.max(1, Number(sp.get("limit")) || 10));
 
   if (!q) return NextResponse.json([]);
-  if (categoryId != null && (!Number.isInteger(categoryId) || categoryId <= 0)) {
-    return NextResponse.json({ error: "Invalid categoryId" }, { status: 400 });
+  if (
+    displayCategoryId != null &&
+    (!Number.isInteger(displayCategoryId) || displayCategoryId <= 0)
+  ) {
+    return NextResponse.json({ error: "Invalid displayCategoryId" }, { status: 400 });
   }
   if (subCategoryId != null && (!Number.isInteger(subCategoryId) || subCategoryId <= 0)) {
     return NextResponse.json({ error: "Invalid subCategoryId" }, { status: 400 });
@@ -65,10 +80,11 @@ export async function GET(req: Request) {
   params.push(`%${corePhrase}%`);
   const corePhrasePos = params.length;
 
-  let categoryFilter = "";
-  if (categoryId != null) {
-    params.push(categoryId);
-    categoryFilter = `AND pc."categoryId" = $${params.length}`;
+  // 显示层一级过滤 (dc.id)。隐藏一级不在 DisplayCategory 里, 传了也自然搜不到。
+  let displayCategoryFilter = "";
+  if (displayCategoryId != null) {
+    params.push(displayCategoryId);
+    displayCategoryFilter = `AND dc.id = $${params.length}`;
   }
   let subCategoryFilter = "";
   if (subCategoryId != null) {
@@ -84,14 +100,18 @@ export async function GET(req: Request) {
       p.name         AS "partName",
       sc.id          AS "subCategoryId",
       sc.name        AS "subCategoryName",
-      c.id           AS "categoryId",
-      c.name         AS "categoryName"
+      c.id           AS "pcdbCategoryId",
+      dc.id          AS "displayCategoryId",
+      dc.name        AS "displayCategoryName"
     FROM "PcdbPart" p
-    JOIN "PcdbPartCategory" pc ON pc."partId" = p.id
-    JOIN "PcdbCategory" c      ON c.id = pc."categoryId"
-    JOIN "PcdbSubCategory" sc  ON sc.id = pc."subCategoryId"
+    JOIN "PcdbPartCategory" pc  ON pc."partId" = p.id
+    JOIN "PcdbCategory" c       ON c.id = pc."categoryId"
+    JOIN "PcdbSubCategory" sc   ON sc.id = pc."subCategoryId"
+    -- 内连显示层映射: displayCategoryId=NULL (隐藏) 的家在此被剔除
+    JOIN "CategoryDisplayMap" cdm ON cdm."pcdbCategoryId" = c.id
+    JOIN "DisplayCategory" dc     ON dc.id = cdm."displayCategoryId"
     WHERE ${tokenConds.join(" AND ")}
-    ${categoryFilter}
+    ${displayCategoryFilter}
     ${subCategoryFilter}
     ORDER BY
       -- 1. 连续核心短语匹配优先 (本体 "Bumper Cover" 在 "... Cover Nut" 之前)

@@ -524,6 +524,7 @@ model PcdbCategory {
   id             Int                @id // CategoryID
   name           String // CategoryName
   partCategories PcdbPartCategory[]
+  displayMap CategoryDisplayMap?
 
   @@index([name])
 }
@@ -591,4 +592,27 @@ model EbayCategory {
 
   @@index([parentId])
   @@index([name])
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  一级目录调整，通过重命名、合并及隐藏的方减少一级目录
+// ═══════════════════════════════════════════════════════════════
+// ── 1.  17 个浏览一级 ──
+model DisplayCategory {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique          // "Brakes" / "Drivetrain" ...
+  slug      String?  @unique           // 可选,给 URL 用
+  sortOrder Int      @default(0)       // 菜单排序
+
+  categoryMaps CategoryDisplayMap[]
+}
+
+// ── 2. PCdb 原一级 → 显示一级 的映射(合并/改名/隐藏都在这) ──
+model CategoryDisplayMap {
+  pcdbCategoryId    Int  @id           // 一对一,指向 PcdbCategory.id
+  displayCategoryId Int?               // NULL = 隐藏(browsable=false)
+
+  displayCategory DisplayCategory? @relation(fields: [displayCategoryId], references: [id])
+  pcdbCategory    PcdbCategory     @relation(fields: [pcdbCategoryId], references: [id])
 }

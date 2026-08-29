@@ -107,7 +107,9 @@ type VinDecodeResponse =
 // 车辆选择器的两个互斥入口。一次只渲染一个面板。
 type VehicleTab = "manual" | "vin";
 
-type CategoryOpt = { id: number; name: string };
+// 一级 = 显示层 DisplayCategory。id 是 DisplayCategory.id (仅供菜单显示/高亮),
+// pcdbCategoryIds 是它合并的真实 PcdbCategory.id 组 (二级/零件取并集、搜索/追踪用)。
+type CategoryOpt = { id: number; name: string; pcdbCategoryIds: number[] };
 type SubCategoryOpt = { subCategoryId: number; subCategoryName: string };
 type PartOpt = { partId: number; partName: string };
 type PartSearchResult = {
@@ -115,8 +117,10 @@ type PartSearchResult = {
   partName: string;
   subCategoryId: number;
   subCategoryName: string;
-  categoryId: number;
-  categoryName: string;
+  // 显示层一级 (路径里展示这个); pcdbCategoryId 是原始 PCdb 一级, 选中后 eBay/追踪用
+  pcdbCategoryId: number;
+  displayCategoryId: number;
+  displayCategoryName: string;
 };
 
 type SearchResponse = {
@@ -210,7 +214,7 @@ export default function VehicleSearchClient({
       .finally(() => setLoadingYears(false));
   }, []);
 
-  // 26 大类预取
+  // 显示层一级预取 (17 个 DisplayCategory, 合并后、隐藏的已剔除)
   useEffect(() => {
     fetch("/api/parts/categories")
       .then((r) => r.json())
@@ -229,11 +233,16 @@ export default function VehicleSearchClient({
     }
     setLoadingSearch(true);
     const t = setTimeout(() => {
-      // 范围按最细的选中层级: 子类 > 大类 > 全局
+      // 范围按最细的选中层级: 子类 > 一级 > 全局。一级过滤用显示层 id
+      // (scopeCat.id = DisplayCategory.id), 合并的多个 pcdbCategory 由后端 join
+      // 处理; 结果本身也已经过显示层映射 (隐藏一级的零件不会回来)。
       const url =
         `/api/parts/search?q=${encodeURIComponent(q)}&limit=15` +
-        (scopeCat ? `&categoryId=${scopeCat.id}` : "") +
-        (scopeSub ? `&subCategoryId=${scopeSub.subCategoryId}` : "");
+        (scopeSub
+          ? `&subCategoryId=${scopeSub.subCategoryId}`
+          : scopeCat
+            ? `&displayCategoryId=${scopeCat.id}`
+            : "");
       fetch(url)
         .then((r) => r.json())
         .then((d: PartSearchResult[]) =>
@@ -245,14 +254,15 @@ export default function VehicleSearchClient({
     return () => clearTimeout(t);
   }, [partDescription, selectedPartId, freeTextMode, scopeCat, scopeSub]);
 
-  // 级联菜单: 展开/折叠某大类看它的子类 (accordion, 一次一个)。不提交范围。
-  function toggleMenuCategory(id: number) {
-    const next = menuExpandedCat === id ? null : id;
+  // 级联菜单: 展开/折叠某显示一级看它的子类 (accordion, 一次一个)。不提交范围。
+  // 二级 = 该显示一级合并的所有 pcdbCategory 的子类并集。
+  function toggleMenuCategory(cat: CategoryOpt) {
+    const next = menuExpandedCat === cat.id ? null : cat.id;
     setMenuExpandedCat(next);
     setSubcategories([]);
     if (next == null) return;
     setLoadingSubcategories(true);
-    fetch(`/api/parts/subcategories?categoryId=${next}`)
+    fetch(`/api/parts/subcategories?categoryIds=${cat.pcdbCategoryIds.join(",")}`)
       .then((r) => r.json())
       .then((d: SubCategoryOpt[]) => setSubcategories(Array.isArray(d) ? d : []))
       .catch(() => setSubcategories([]))
@@ -298,7 +308,7 @@ export default function VehicleSearchClient({
     setParts([]);
     setLoadingParts(true);
     fetch(
-      `/api/parts/by-subcategory?subCategoryId=${sub.subCategoryId}&categoryId=${cat.id}`
+      `/api/parts/by-subcategory?subCategoryId=${sub.subCategoryId}&categoryIds=${cat.pcdbCategoryIds.join(",")}`
     )
       .then((r) => r.json())
       .then((d: PartOpt[]) => setParts(Array.isArray(d) ? d : []))
@@ -309,18 +319,19 @@ export default function VehicleSearchClient({
 
   // 选一个 Part → 最终描述 = 用户输入里的方位词 + Part 标准名。
   // 自动填该 Part 的归属分类到下拉 (source='auto', 覆盖之前的 user 选择, 更准确)。
-  // pcdbPartId 始终存本体 id (不含方位)。
+  // scope 由搜索结果直接给 (id=显示层一级, pcdbCategoryIds=[该零件真实 pcdb 一级]) ——
+  // 名字/高亮走显示层, 过滤/追踪仍用真实 pcdbCategoryId。pcdbPartId 始终存本体 id。
   function selectPart(
     partId: number,
     partName: string,
     subCategoryId: number,
-    // 来自搜索结果时带上分类, 用来同步分类下拉 (浏览列表选的已经在 scope 内, 不传)
-    category?: CategoryOpt,
+    // 来自搜索结果时带上归属一级 (浏览列表选的已经在 scope 内, 不传)
+    scope?: CategoryOpt,
     subCategory?: SubCategoryOpt
   ) {
     setPartDescription((prev) => applyPositions(prev, partName));
     setSelectedPartId(partId);
-    if (category) setScopeCat(category);
+    if (scope) setScopeCat(scope);
     if (subCategory) setScopeSub(subCategory);
     setCategorySource("auto"); // 选 Part → 自动填分类
     setFreeTextMode(false);
@@ -607,7 +618,12 @@ export default function VehicleSearchClient({
     // 提交的分类范围: 选了 Part → 用 Part 的(auto); 自由文本 → 只用 user 来源的
     // (auto 来源的分类在自由文本时排除, 虽然清除逻辑通常已把它清掉了)
     const usingScope = selectedPartId != null || categorySource === "user";
-    const submitCategoryId = usingScope ? (scopeCat?.id ?? null) : null;
+    // 追踪落库的 pcdbCategoryId 必须是真实 PcdbCategory.id (history 视图据此查名字),
+    // 绝不能是 DisplayCategory.id。合并型一级跨多个 pcdbCategory 时无单一真值 → null;
+    // 选了具体 Part / 单成员一级时, pcdbCategoryIds 恰好一个, 落真实 id。
+    const scopePcdbIds = scopeCat?.pcdbCategoryIds ?? [];
+    const submitCategoryId =
+      usingScope && scopePcdbIds.length === 1 ? scopePcdbIds[0] : null;
     const submitSubCategoryId = usingScope
       ? (scopeSub?.subCategoryId ?? null)
       : null;
@@ -695,17 +711,17 @@ export default function VehicleSearchClient({
 
       {/* 车辆胶囊 + 零件表单 */}
       <div className="mt-4 bg-white border border-gray-200 rounded-xl p-6">
-        {/* Row 1: Vehicle 胶囊 + Part Number (同行) */}
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+        {/* Row 1: Vehicle 胶囊 + Part Number (同行)。列宽与第二层 (分类 400 + 搜索 flex) 对齐 */}
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
           {/* 车辆胶囊 + popover */}
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 sm:w-[400px]">
             <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
               Vehicle
             </div>
             <button
               type="button"
               onClick={() => setPopoverOpen((o) => !o)}
-              className="mt-1 flex items-center gap-2 w-full sm:min-w-[220px] px-3 py-2 rounded-full border border-gray-300 bg-white text-sm text-[#1A1A2E] hover:border-gray-400 transition"
+              className="mt-1 flex items-center gap-2 w-full px-3 py-2 rounded-full border border-gray-300 bg-white text-sm text-[#1A1A2E] hover:border-gray-400 transition"
             >
               <Car size={14} className="text-gray-500 shrink-0" />
               <span className="truncate">{capsuleLabel}</span>
@@ -949,8 +965,8 @@ export default function VehicleSearchClient({
             )}
           </div>
 
-          {/* Part Number (固定宽) */}
-          <div className="shrink-0 sm:w-[200px]">
+          {/* Part Number —— 占满剩余宽度, 与第二层的搜索框 (flex-1) 对齐 */}
+          <div className="flex-1 min-w-0">
             <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
               Part number (optional)
             </label>
@@ -1002,8 +1018,8 @@ export default function VehicleSearchClient({
             <div>
               {/* 一行: 分类级联下拉 + 搜索框 */}
               <div className="flex flex-col sm:flex-row gap-2">
-                {/* 分类级联下拉 */}
-                <div className="relative shrink-0 sm:w-[240px]">
+                {/* 分类级联下拉 (选了零件后要能显示完整 "一级 › 子类" 路径, 给得宽些) */}
+                <div className="relative shrink-0 sm:w-[400px]">
                   <button
                     type="button"
                     onClick={() => setCatMenuOpen((o) => !o)}
@@ -1044,7 +1060,7 @@ export default function VehicleSearchClient({
                             >
                               <button
                                 type="button"
-                                onClick={() => toggleMenuCategory(c.id)}
+                                onClick={() => toggleMenuCategory(c)}
                                 className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition ${
                                   catActive
                                     ? "bg-teal-50 text-teal-700 font-medium"
@@ -1179,7 +1195,11 @@ export default function VehicleSearchClient({
                                       r.partId,
                                       r.partName,
                                       r.subCategoryId,
-                                      { id: r.categoryId, name: r.categoryName },
+                                      {
+                                        id: r.displayCategoryId,
+                                        name: r.displayCategoryName,
+                                        pcdbCategoryIds: [r.pcdbCategoryId],
+                                      },
                                       {
                                         subCategoryId: r.subCategoryId,
                                         subCategoryName: r.subCategoryName,
@@ -1194,7 +1214,7 @@ export default function VehicleSearchClient({
                                 >
                                   <div className="text-sm text-[#1A1A2E]">{r.partName}</div>
                                   <div className="text-[11px] text-gray-400">
-                                    {r.categoryName} › {r.subCategoryName}
+                                    {r.displayCategoryName} › {r.subCategoryName}
                                   </div>
                                 </button>
                               ))}

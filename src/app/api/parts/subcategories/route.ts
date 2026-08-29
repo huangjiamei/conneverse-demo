@@ -1,25 +1,28 @@
 /**
- * GET /api/parts/subcategories?categoryId=3
+ * GET /api/parts/subcategories?categoryIds=15,16   (也兼容旧的 ?categoryId=3)
  *
- * 返回某大类下的所有子类 (经 PcdbPartCategory 反查, 去重)。
- * 给 /search 三级浏览的"区域 2"用。
+ * 返回一组 pcdbCategory 下的所有子类 (经 PcdbPartCategory 反查, 跨这些大类去重)。
+ * 显示一级现在是 DisplayCategory, 一个显示一级可合并多个 pcdbCategory, 所以这里
+ * 收一组 categoryId, 返回它们二级的并集 —— 给 /search 菜单的"区域 2"用。
+ *
  * 返回: [{ subCategoryId, subCategoryName }]  按名称排序
  */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { parseCategoryIds } from "@/lib/parts/categoryIds";
 
 export async function GET(req: Request) {
-  const categoryId = Number(new URL(req.url).searchParams.get("categoryId"));
-  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+  const ids = parseCategoryIds(new URL(req.url).searchParams);
+  if (ids.length === 0) {
     return NextResponse.json(
-      { error: "Query must include a valid ?categoryId=<int>" },
+      { error: "Query must include ?categoryIds=<int,int,...> (or ?categoryId=<int>)" },
       { status: 400 }
     );
   }
 
   const rows = await prisma.pcdbPartCategory.findMany({
-    where: { categoryId },
+    where: { categoryId: { in: ids } },
     distinct: ["subCategoryId"],
     select: { subCategory: { select: { id: true, name: true } } },
     orderBy: { subCategory: { name: "asc" } },
