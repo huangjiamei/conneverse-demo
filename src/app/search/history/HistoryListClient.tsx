@@ -30,6 +30,7 @@ export type PickCell = {
 export type HistoryRow = {
   id: string;
   part: string;
+  partNumber: string | null; // 按零件号搜时描述为空, 用它兜底显示
   vehicle: string; // "2022 Toyota Camry" (+ submodel)
   category: string | null;
   verifiedCount: number;
@@ -44,7 +45,7 @@ export type HistoryRow = {
  * 空间, Verified 的 110px 也远超一个数字的需要), 省下的横向空间全给 pick 列。
  */
 const COL = {
-  part: "md:w-[190px]",
+  part: "md:w-[248px]",
   // 去掉 When 列后腾出的空间给它, 表头 "Verified" 才不会被压得换行
   verified: "md:w-[84px]",
   pick: "w-full md:flex-1 md:min-w-0",
@@ -221,7 +222,7 @@ export default function HistoryListClient({
                       isEmpty ? "text-gray-400" : "text-[#1A1A2E]"
                     }`}
                   >
-                    {r.part}
+                    {[r.part, r.partNumber].filter(Boolean).join(" · ")}
                   </div>
                   <div className="text-xs text-gray-500 truncate">
                     {r.vehicle}
@@ -301,7 +302,7 @@ function Pick({ cell }: { cell: PickCell | null }) {
   if (!cell) return <span className="text-xs text-gray-400">—</span>;
   return (
     <div className="text-xs min-w-0">
-      <div className="truncate text-gray-700">{cell.label}</div>
+      <div className="line-clamp-2 break-words text-gray-700">{cell.label}</div>
       <div className="tabular-nums text-gray-400">
         {cell.price}
         {cell.priceNote && (

@@ -45,6 +45,7 @@ export default async function SearchHistoryPage() {
       queryVehicleModel: true,
       queryVehicleSubModel: true,
       queryPartDescription: true,
+      queryPartNumber: true,
       queryPcdbCategoryId: true,
     },
   });
@@ -92,6 +93,7 @@ export default async function SearchHistoryPage() {
     return {
       id: s.id,
       part: s.queryPartDescription,
+      partNumber: s.queryPartNumber,
       vehicle: `${s.queryVehicleYear} ${s.queryVehicleMake} ${s.queryVehicleModel}${sub}`,
       category:
         s.queryPcdbCategoryId != null

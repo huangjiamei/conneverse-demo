@@ -125,11 +125,14 @@ export async function POST(req: Request) {
   const hasVehicleId = Number.isInteger(vehicleId);
   const hasBaseVehicleId = Number.isInteger(baseVehicleId);
   // 异或: 两个都传或都不传都是坏请求 (避免 "All" 和具体 sub-model 语义打架)
-  if (!partDescription || hasVehicleId === hasBaseVehicleId) {
+  // 零件描述与零件号至少给一个 (只给零件号也能搜 —— matcher 按 MPN 匹配)
+  const hasPartQuery =
+    (partDescription?.trim() ?? "") !== "" || (partNumber?.trim() ?? "") !== "";
+  if (!hasPartQuery || hasVehicleId === hasBaseVehicleId) {
     return NextResponse.json(
       {
         error:
-          "Body must include { partDescription: string } and exactly one of { vehicleId: int } | { baseVehicleId: int }",
+          "Body must include a { partDescription } or { partNumber }, and exactly one of { vehicleId: int } | { baseVehicleId: int }",
       },
       { status: 400 }
     );
@@ -216,7 +219,7 @@ export async function POST(req: Request) {
       // 空串 = All submodels; matcher 据此决定 compat_filter 加不加 Trim 段
       sub_model: subModelName ?? "",
     },
-    part_description: partDescription,
+    part_description: partDescription ?? "",
     part_type: "",
     part_number: partNumber ?? "",
   };
@@ -331,7 +334,7 @@ export async function POST(req: Request) {
       queryVehicleYear: yearId,
       queryVehicleMake: makeName,
       queryVehicleModel: modelName,
-      queryPartDescription: partDescription!,
+      queryPartDescription: partDescription ?? "",
       queryPartNumber: partNumber ?? null,
       // VCdb 精确追踪: All 模式下 subModel / vehicleId 为 null, baseVehicleId 始终有值
       queryVehicleSubModel: subModelName,

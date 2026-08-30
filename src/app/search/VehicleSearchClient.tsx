@@ -614,7 +614,8 @@ export default function VehicleSearchClient({
   }
 
   async function handleSearch() {
-    if (!subSelection || !partDescription) return;
+    // 车型必选; 零件描述与零件号至少给一个 (只填零件号也能按 MPN 搜)
+    if (!subSelection || (!partDescription.trim() && !partNumber.trim())) return;
     // 提交的分类范围: 选了 Part → 用 Part 的(auto); 自由文本 → 只用 user 来源的
     // (auto 来源的分类在自由文本时排除, 虽然清除逻辑通常已把它清掉了)
     const usingScope = selectedPartId != null || categorySource === "user";
@@ -687,8 +688,8 @@ export default function VehicleSearchClient({
     ? null
     : !vehicleSelected
       ? "Select a vehicle to search."
-      : partDescription.trim() === ""
-        ? "Enter a part to search."
+      : partDescription.trim() === "" && partNumber.trim() === ""
+        ? "Enter a part or part number to search."
         : null;
   const canSearch = !searching && blockReason === null;
 
@@ -1167,7 +1168,7 @@ export default function VehicleSearchClient({
               </div>
 
               {/* 点不动时把原因说出来, 而不是只给一个悬浮 title */}
-              {blockReason && partDescription.trim() !== "" && (
+              {blockReason && (partDescription.trim() !== "" || partNumber.trim() !== "") && (
                 <p className="mt-1.5 text-xs text-amber-600">{blockReason}</p>
               )}
 

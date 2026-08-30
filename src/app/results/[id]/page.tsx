@@ -69,10 +69,11 @@ export default async function ResultsPage({
       {/* 搜索快照头 (同 admin) */}
       <div className="mt-4 bg-[#1A1A2E] text-white rounded-xl p-6">
         <div className="text-xs text-white/50 tracking-wide">Searched for</div>
-        <div className="mt-1 text-xl font-semibold">{context.part}</div>
+        <div className="mt-1 text-xl font-semibold">
+          {[context.part, context.partNumber].filter(Boolean).join(" · ") || "—"}
+        </div>
         <div className="mt-1 text-sm text-white/70">
           {context.vehicle}
-          {context.partNumber ? ` · PN ${context.partNumber}` : ""}
           {context.category ? ` · ${context.category}` : ""}
         </div>
         <div className="mt-2 text-xs text-white/40">{when}</div>

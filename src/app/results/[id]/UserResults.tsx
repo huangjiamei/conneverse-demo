@@ -83,11 +83,8 @@ function cardPrice(
     searchedAt
   );
   return {
-    main: `$${c.quotedPrice}`,
-    sub: {
-      text: `Delivered price${delivery ? ` · ${delivery}` : ""}`,
-      tone: "muted",
-    },
+    main: delivery ? `$${c.quotedPrice} · ${delivery}` : `$${c.quotedPrice}`,
+    sub: null,
   };
 }
 
