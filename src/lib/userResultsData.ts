@@ -176,7 +176,8 @@ function fromRaw(
   const compat = raw?.compatibility || {};
   return buildClientCandidate({
     row: c,
-    brand: (compat.Brand as string) || (compat.Make as string) || null,
+    // 只认真正的 Brand 属性; 不退回 Make —— Make 常是车辆品牌, 会把车厂当成零件品牌。
+    brand: (compat.Brand as string) || null,
     enrichedFields: raw?.optimizer_fields ?? null,
     compatibility: (raw?.compatibility as Record<string, unknown>) ?? null,
     additionalImageUrls: raw?.additional_image_urls ?? [],

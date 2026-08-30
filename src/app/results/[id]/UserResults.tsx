@@ -36,19 +36,6 @@ const BADGE_META: Record<
 
 // ---- helpers ------------------------------------------------
 
-function shortTitle(title: string, n = 40): string {
-  return title.length > n ? title.slice(0, n).trimEnd() + "…" : title;
-}
-
-// 主标识: brand 若有效 → brand + muted 短标题副标; 否则回退短标题。
-function mainIdentifier(c: Candidate): { name: string; sub: string | null } {
-  const brand = c.brand?.trim();
-  if (brand && brand.toLowerCase() !== "unbranded") {
-    return { name: brand, sub: `— ${shortTitle(c.title)}` };
-  }
-  return { name: shortTitle(c.title), sub: null };
-}
-
 function readableReturns(c: Candidate): string {
   const ef = c.enrichedFields || {};
   if (ef.returns_accepted === true) {
@@ -188,9 +175,19 @@ function ExpandedCard({
   searchedAt: string | Date | null;
 }) {
   const px = cardPrice(candidate, searchedAt);
+  // Brand 从"适配"里挪出来, 单独放到下面的 Details; categoryPath 只是内部路径, 不显示。
   const compat = candidate.compatibility
-    ? Object.entries(candidate.compatibility).filter(([k]) => k !== "categoryPath")
+    ? Object.entries(candidate.compatibility).filter(
+        ([k]) => k !== "categoryPath" && k !== "Brand"
+      )
     : [];
+  // 零件品牌: 只认真正的 Brand 属性, 不退回 Make (Make 常是车辆品牌, 会张冠李戴);
+  // "Unbranded" 是 eBay 的无效占位值, 当没有处理 (没有就整个 Brand 项不显示)。
+  const brandRaw =
+    typeof candidate.compatibility?.Brand === "string"
+      ? candidate.compatibility.Brand.trim()
+      : "";
+  const brand = brandRaw.toLowerCase() === "unbranded" ? "" : brandRaw;
   const pns = candidate.partNumbers ?? [];
   const warranty = formatWarranty(candidate.enrichedFields?.warranty_raw);
   const bm = badge ? BADGE_META[badge] : null;
@@ -241,6 +238,11 @@ function ExpandedCard({
 
         <Section label="Details">
           <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-[13px] text-gray-700">
+            {brand && (
+              <span>
+                <span className="text-gray-400">Brand:</span> {brand}
+              </span>
+            )}
             <span>
               <span className="text-gray-400">Condition:</span>{" "}
               {candidate.condition ?? "—"}
@@ -308,7 +310,6 @@ function AlternateRow({
   searchedAt: string | Date | null;
 }) {
   const [open, setOpen] = useState(false);
-  const id = mainIdentifier(candidate);
   const delivery = formatDeliveryRange(
     candidate.enrichedFields?.delivery_min_date,
     candidate.enrichedFields?.delivery_max_date,
@@ -324,13 +325,7 @@ function AlternateRow({
       >
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold truncate text-[#1f2937]">
-            {id.name}
-            {id.sub && (
-              <span className="font-normal text-gray-500 text-[12.5px]">
-                {" "}
-                {id.sub}
-              </span>
-            )}
+            {candidate.title}
           </div>
         </div>
         <div className="text-[13px] text-gray-700 shrink-0 whitespace-nowrap">

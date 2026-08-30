@@ -6,7 +6,7 @@
  * matcher payload in MatchSearch.rawResponse. Nothing is recomputed and the
  * schema is untouched.
  *
- * Why the raw query: brand, shipping cost and delivery dates only exist inside
+ * Why the raw query: shipping cost and delivery dates only exist inside
  * rawResponse (Candidate has price but no shipping). Those blobs average ~9 KB,
  * so pulling them whole for a 200-row page would move megabytes. Instead we let
  * Postgres expand the jsonb array and hand back just the few fields we show,
@@ -19,7 +19,7 @@ import { formatDeliveryRange } from "@/lib/formatDelivery";
 
 /** 一个格子要显示的东西 */
 export type PickCell = {
-  /** brand 优先, 没有就用截短的标题 */
+  /** 截短的标题 (品牌不可靠, 不再用它打头 —— 展开卡片的 Details 里才显示品牌) */
   label: string;
   /** 到手价 (含运费), 已格式化 */
   price: string;
@@ -34,7 +34,6 @@ export type PickCell = {
 export type PresetPicks = Map<string, PickCell>;
 
 type RawFields = {
-  brand: string | null;
   shippingCost: string | null;
   deliveryMin: string | null;
   deliveryMax: string | null;
@@ -44,13 +43,6 @@ type RawFields = {
 
 function shortTitle(title: string, n = 42): string {
   return title.length > n ? title.slice(0, n).trimEnd() + "…" : title;
-}
-
-/** 与结果卡一致: brand 有效就用 brand, 否则退回截短标题 */
-function labelFor(title: string, brand: string | null): string {
-  const b = brand?.trim();
-  if (b && b.toLowerCase() !== "unbranded") return b;
-  return shortTitle(title);
 }
 
 /**
@@ -85,8 +77,6 @@ export async function loadPresetPicks(
     SELECT ms.id                                            AS "matchSearchId",
            ms."createdAt"                                   AS "searchedAt",
            elem->>'item_id'                                 AS "itemId",
-           COALESCE(elem->'compatibility'->>'Brand',
-                    elem->'compatibility'->>'Make')         AS "brand",
            elem->'optimizer_fields'->>'shipping_cost'       AS "shippingCost",
            elem->'optimizer_fields'->>'delivery_min_date'   AS "deliveryMin",
            elem->'optimizer_fields'->>'delivery_max_date'   AS "deliveryMax"
@@ -108,7 +98,7 @@ export async function loadPresetPicks(
     const shipKnown = ship != null && !Number.isNaN(ship);
 
     out.set(w.matchSearchId, {
-      label: labelFor(w.candidate.title, raw?.brand ?? null),
+      label: shortTitle(w.candidate.title),
       price: `$${(price + (shipKnown ? ship : 0)).toFixed(2)}`,
       priceNote: shipKnown ? null : "+ shipping",
       delivery: opts.withDelivery
