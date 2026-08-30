@@ -712,10 +712,8 @@ export default function VehicleSearchClient({
 
       {/* 车辆胶囊 + 零件表单 */}
       <div className="mt-4 bg-white border border-gray-200 rounded-xl p-6">
-        {/* Row 1: Vehicle 胶囊 + Part Number (同行)。列宽与第二层 (分类 400 + 搜索 flex) 对齐 */}
-        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-          {/* 车辆胶囊 + popover */}
-          <div className="relative shrink-0 sm:w-[400px]">
+        {/* Vehicle —— 独占一整行, 作为锚点 (视觉权重最高) */}
+        <div className="relative">
             <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
               Vehicle
             </div>
@@ -964,10 +962,12 @@ export default function VehicleSearchClient({
                 </div>
               </>
             )}
-          </div>
+        </div>
 
-          {/* Part Number —— 占满剩余宽度, 与第二层的搜索框 (flex-1) 对齐 */}
-          <div className="flex-1 min-w-0">
+        {/* 零件模块 —— 一条分隔线把"零件"和"车"分开 */}
+        <div className="mt-6 pt-6 border-t border-gray-100">
+          {/* Part Number (Optional) —— 整行 full width */}
+          <div>
             <label className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
               Part number (optional)
             </label>
@@ -978,11 +978,9 @@ export default function VehicleSearchClient({
               placeholder="OEM number if known"
             />
           </div>
-        </div>
 
-        {/* 零件选择: 分类级联下拉 + 搜索为主 (+ 自由文本兜底) */}
-        <div className="mt-6 pt-6 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-2 gap-3">
+          {/* Part —— 类目下拉 + 搜索框 (同一逻辑分组的第二行) */}
+          <div className="flex items-center justify-between mb-2 mt-6 gap-3">
             <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
               Part
             </div>
@@ -1017,10 +1015,10 @@ export default function VehicleSearchClient({
             </div>
           ) : (
             <div>
-              {/* 一行: 分类级联下拉 + 搜索框 */}
-              <div className="flex flex-col sm:flex-row gap-2">
-                {/* 分类级联下拉 (选了零件后要能显示完整 "一级 › 子类" 路径, 给得宽些) */}
-                <div className="relative shrink-0 sm:w-[400px]">
+              {/* 一行两列: 类目下拉 (~2/5) + 搜索框 (3/5); 移动端堆叠成单列 */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                {/* 分类级联下拉 (~2/5) */}
+                <div className="relative md:col-span-2">
                   <button
                     type="button"
                     onClick={() => setCatMenuOpen((o) => !o)}
@@ -1121,7 +1119,7 @@ export default function VehicleSearchClient({
 
                 {/* 搜索框 = partDescription (保留用户输入, 带方位)。
                     右侧放大镜就是提交按钮,Enter 等价 —— 没有单独的搜索按钮。 */}
-                <div className="relative flex-1 min-w-0">
+                <div className="relative md:col-span-3 min-w-0">
                   <input
                     value={partDescription}
                     onChange={(e) => onPartDescriptionChange(e.target.value)}
