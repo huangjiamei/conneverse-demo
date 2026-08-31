@@ -108,19 +108,26 @@ type VinDecodeResponse =
 type VehicleTab = "manual" | "vin";
 
 // 一级 = 显示层 DisplayCategory。id 是 DisplayCategory.id (仅供菜单显示/高亮),
-// pcdbCategoryIds 是它合并的真实 PcdbCategory.id 组 (二级/零件取并集、搜索/追踪用)。
+// pcdbCategoryIds 是选中范围对应的真实 PcdbCategory.id (搜索/追踪用):
+//   选"整个一级" → []; 选某个二级 → [该二级的 pcdbCategoryId]。
 type CategoryOpt = { id: number; name: string; pcdbCategoryIds: number[] };
 type SubCategoryOpt = { subCategoryId: number; subCategoryName: string };
+
+// 浏览三层树 (GET /api/parts/browse-tree)。二级归属走 桶 这条链, 不用 CategoryDisplayMap。
+type TreeSub = { pcdbCategoryId: number; pcdbSubCategoryId: number; name: string }; // L3
+type TreeBucket = { id: number; name: string; subcategories: TreeSub[] };           // L2 展示桶
+type TreeCategory = { id: number; name: string; slug: string | null; buckets: TreeBucket[] }; // L1
 type PartOpt = { partId: number; partName: string };
 type PartSearchResult = {
   partId: number;
   partName: string;
   subCategoryId: number;
-  subCategoryName: string;
+  subCategoryName: string; // COALESCE(displayName, PcdbSubCategory.name)
   // 显示层一级 (路径里展示这个); pcdbCategoryId 是原始 PCdb 一级, 选中后 eBay/追踪用
   pcdbCategoryId: number;
   displayCategoryId: number;
   displayCategoryName: string;
+  bucketName: string | null; // 展示桶名 (无桶映射/隐藏时为 null → 小字退回两段)
 };
 
 type SearchResponse = {
@@ -182,12 +189,11 @@ export default function VehicleSearchClient({
   const [userResults, setUserResults] = useState<UserResultsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // PCdb: 分类级联下拉 + 搜索为主
-  const [categories, setCategories] = useState<CategoryOpt[]>([]);
+  // PCdb 浏览: 显示层三层树 (一级 → 桶 → 二级) + 搜索为主
+  const [tree, setTree] = useState<TreeCategory[]>([]);
   const [catMenuOpen, setCatMenuOpen] = useState(false); // 级联下拉是否展开
-  const [menuExpandedCat, setMenuExpandedCat] = useState<number | null>(null); // 菜单内手风琴展开的大类
-  const [subcategories, setSubcategories] = useState<SubCategoryOpt[]>([]);
-  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
+  const [menuExpandedCat, setMenuExpandedCat] = useState<number | null>(null); // 手风琴展开的一级
+  const [menuExpandedBucket, setMenuExpandedBucket] = useState<number | null>(null); // 手风琴展开的桶
   // 已提交的搜索范围 (存对象拿名字做入口标签)
   const [scopeCat, setScopeCat] = useState<CategoryOpt | null>(null);
   const [scopeSub, setScopeSub] = useState<SubCategoryOpt | null>(null);
@@ -214,11 +220,11 @@ export default function VehicleSearchClient({
       .finally(() => setLoadingYears(false));
   }, []);
 
-  // 显示层一级预取 (17 个 DisplayCategory, 合并后、隐藏的已剔除)
+  // 浏览三层树预取 (一级 → 桶 → 二级; 隐藏的二级已在服务端剔除)
   useEffect(() => {
-    fetch("/api/parts/categories")
+    fetch("/api/parts/browse-tree")
       .then((r) => r.json())
-      .then((data: CategoryOpt[]) => setCategories(data))
+      .then((data: TreeCategory[]) => setTree(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -254,19 +260,16 @@ export default function VehicleSearchClient({
     return () => clearTimeout(t);
   }, [partDescription, selectedPartId, freeTextMode, scopeCat, scopeSub]);
 
-  // 级联菜单: 展开/折叠某显示一级看它的子类 (accordion, 一次一个)。不提交范围。
-  // 二级 = 该显示一级合并的所有 pcdbCategory 的子类并集。
-  function toggleMenuCategory(cat: CategoryOpt) {
-    const next = menuExpandedCat === cat.id ? null : cat.id;
-    setMenuExpandedCat(next);
-    setSubcategories([]);
-    if (next == null) return;
-    setLoadingSubcategories(true);
-    fetch(`/api/parts/subcategories?categoryIds=${cat.pcdbCategoryIds.join(",")}`)
-      .then((r) => r.json())
-      .then((d: SubCategoryOpt[]) => setSubcategories(Array.isArray(d) ? d : []))
-      .catch(() => setSubcategories([]))
-      .finally(() => setLoadingSubcategories(false));
+  // 级联菜单: 展开/折叠某显示一级看它的桶 (accordion, 一次一个)。整棵树已预取, 不再请求。
+  // 换一级时顺手收起已展开的桶。不提交范围。
+  function toggleMenuCategory(catId: number) {
+    setMenuExpandedCat((prev) => (prev === catId ? null : catId));
+    setMenuExpandedBucket(null);
+  }
+
+  // 展开/折叠某个桶看它下面的二级 (accordion, 一次一个)。不提交范围。
+  function toggleMenuBucket(bucketId: number) {
+    setMenuExpandedBucket((prev) => (prev === bucketId ? null : bucketId));
   }
 
   // 分类是自动填的 → 连同来源一起清 (Part 走了, auto 填的也走)
@@ -359,12 +362,37 @@ export default function VehicleSearchClient({
     setSearchResults([]);
     setResultsOpen(false);
     setMenuExpandedCat(null);
+    setMenuExpandedBucket(null);
     setCatMenuOpen(false);
   }
 
-  // 入口标签
+  // 选中二级时, 从浏览树里按 L3 身份 (pcdbCategoryId + pcdbSubCategoryId) 定位这条二级,
+  // 一次拿到它的父桶名 (面包屑中间那段) + 显示名 (树里已是 COALESCE(displayName,
+  // PcdbSubCategory.name))。找不到 (如无桶映射的零件) 就不塞桶、退回 scope 里的原始名。
+  // 纯显示层, 不进 scope 结构。
+  const treeL3 =
+    scopeSub && scopeCat
+      ? (() => {
+          const l1 = tree.find((c) => c.id === scopeCat.id);
+          for (const b of l1?.buckets ?? []) {
+            const s = b.subcategories.find(
+              (x) =>
+                x.pcdbSubCategoryId === scopeSub.subCategoryId &&
+                x.pcdbCategoryId === scopeCat.pcdbCategoryIds[0]
+            );
+            if (s) return { bucketName: b.name, subName: s.name };
+          }
+          return null;
+        })()
+      : null;
+  // 二级名同理: 优先浏览树的 COALESCE 名, 树里没有才退回 scope 里存的原始名
+  const scopeSubName = treeL3?.subName ?? scopeSub?.subCategoryName ?? "";
+
+  // 入口标签: 二级 → 「一级 › 桶 › 二级」(桶取不到时退回两段); 整级 → 「一级」
   const scopeLabel = scopeSub
-    ? `${scopeCat?.name ?? ""} › ${scopeSub.subCategoryName}`
+    ? treeL3?.bucketName
+      ? `${scopeCat?.name ?? ""} › ${treeL3.bucketName} › ${scopeSubName}`
+      : `${scopeCat?.name ?? ""} › ${scopeSubName}`
     : scopeCat
       ? scopeCat.name
       : "All categories";
@@ -1049,19 +1077,20 @@ export default function VehicleSearchClient({
                         >
                           All categories
                         </button>
-                        {categories.map((c) => {
-                          const open = menuExpandedCat === c.id;
-                          const catActive = scopeCat?.id === c.id && !scopeSub;
+                        {tree.map((c) => {
+                          const l1Open = menuExpandedCat === c.id;
+                          const l1Active = scopeCat?.id === c.id && !scopeSub;
                           return (
                             <div
                               key={c.id}
                               className="border-b border-gray-50 last:border-b-0"
                             >
+                              {/* L1 · 显示一级 */}
                               <button
                                 type="button"
-                                onClick={() => toggleMenuCategory(c)}
+                                onClick={() => toggleMenuCategory(c.id)}
                                 className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition ${
-                                  catActive
+                                  l1Active
                                     ? "bg-teal-50 text-teal-700 font-medium"
                                     : "text-[#1A1A2E] hover:bg-gray-50"
                                 }`}
@@ -1069,44 +1098,80 @@ export default function VehicleSearchClient({
                                 <span className="truncate">{c.name}</span>
                                 <ChevronDown
                                   size={14}
-                                  className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+                                  className={`shrink-0 text-gray-400 transition-transform ${l1Open ? "rotate-180" : ""}`}
                                 />
                               </button>
-                              {open && (
+                              {l1Open && (
                                 <div className="bg-gray-50/50 pb-1">
-                                  {/* 选整个大类 */}
+                                  {/* 选整个一级 (走 displayCategoryId 过滤) */}
                                   <button
                                     type="button"
-                                    onClick={() => selectCategoryScope(c)}
+                                    onClick={() =>
+                                      selectCategoryScope({
+                                        id: c.id,
+                                        name: c.name,
+                                        pcdbCategoryIds: [],
+                                      })
+                                    }
                                     className="w-full text-left pl-5 pr-3 py-1.5 text-[13px] text-[#00B4A6] hover:bg-gray-100"
                                   >
                                     Search all of {c.name}
                                   </button>
-                                  {loadingSubcategories ? (
-                                    <div className="px-5 py-1.5 text-xs text-gray-400 inline-flex items-center gap-1.5">
-                                      <Loader2 size={11} className="animate-spin" />{" "}
-                                      Loading…
-                                    </div>
-                                  ) : (
-                                    subcategories.map((sub) => {
-                                      const activeSub =
-                                        scopeSub?.subCategoryId === sub.subCategoryId;
-                                      return (
+                                  {/* L2 · 展示桶 (点开看二级) */}
+                                  {c.buckets.map((b) => {
+                                    const bOpen = menuExpandedBucket === b.id;
+                                    return (
+                                      <div key={b.id}>
                                         <button
-                                          key={sub.subCategoryId}
                                           type="button"
-                                          onClick={() => selectSubcategoryScope(c, sub)}
-                                          className={`w-full text-left pl-5 pr-3 py-1.5 text-[13px] transition ${
-                                            activeSub
-                                              ? "text-teal-700 font-medium bg-teal-50"
-                                              : "text-gray-600 hover:bg-gray-100"
-                                          }`}
+                                          onClick={() => toggleMenuBucket(b.id)}
+                                          className="w-full flex items-center justify-between pl-5 pr-3 py-1.5 text-[13px] text-left text-[#1A1A2E] hover:bg-gray-100"
                                         >
-                                          {sub.subCategoryName}
+                                          <span className="truncate">{b.name}</span>
+                                          <ChevronDown
+                                            size={13}
+                                            className={`shrink-0 text-gray-400 transition-transform ${bOpen ? "rotate-180" : ""}`}
+                                          />
                                         </button>
-                                      );
-                                    })
-                                  )}
+                                        {bOpen && (
+                                          <div className="pb-0.5">
+                                            {/* L3 · 二级 (选中即搜; 携带原始 pcdb 身份) */}
+                                            {b.subcategories.map((sub) => {
+                                              const activeSub =
+                                                scopeSub?.subCategoryId === sub.pcdbSubCategoryId &&
+                                                scopeCat?.pcdbCategoryIds[0] === sub.pcdbCategoryId;
+                                              return (
+                                                <button
+                                                  key={`${sub.pcdbCategoryId}-${sub.pcdbSubCategoryId}`}
+                                                  type="button"
+                                                  onClick={() =>
+                                                    selectSubcategoryScope(
+                                                      {
+                                                        id: c.id,
+                                                        name: c.name,
+                                                        pcdbCategoryIds: [sub.pcdbCategoryId],
+                                                      },
+                                                      {
+                                                        subCategoryId: sub.pcdbSubCategoryId,
+                                                        subCategoryName: sub.name,
+                                                      }
+                                                    )
+                                                  }
+                                                  className={`w-full text-left pl-8 pr-3 py-1.5 text-[13px] transition ${
+                                                    activeSub
+                                                      ? "text-teal-700 font-medium bg-teal-50"
+                                                      : "text-gray-600 hover:bg-gray-100"
+                                                  }`}
+                                                >
+                                                  {sub.name}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -1213,7 +1278,10 @@ export default function VehicleSearchClient({
                                 >
                                   <div className="text-sm text-[#1A1A2E]">{r.partName}</div>
                                   <div className="text-[11px] text-gray-400">
-                                    {r.displayCategoryName} › {r.subCategoryName}
+                                    {/* 一级 › 桶 › 二级短名; 桶取不到时退回两段。与面包屑同格式 */}
+                                    {[r.displayCategoryName, r.bucketName, r.subCategoryName]
+                                      .filter(Boolean)
+                                      .join(" › ")}
                                   </div>
                                 </button>
                               ))}

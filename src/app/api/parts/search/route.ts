@@ -14,14 +14,21 @@
  *      word_similarity > 0.3 的, 按相似度降序。
  *   合并: 精确的排最前, 模糊的去重后补在其后, 凑够 limit。
  *
- * 显示层映射 (与一级下拉同源, 两段查询都保留):
- *   结果经 CategoryDisplayMap 内连 DisplayCategory —— displayCategoryId=NULL 的
- *   隐藏一级 (18/23/29/44/45) 被 INNER JOIN 剔除。结果行的一级名显示 DisplayCategory
- *   名 (如 "Brakes"); pcdbCategoryId / subCategoryId 仍是原始 PCdb id (选中后查
- *   eBay / 落库追踪用, 不受显示层改名合并影响; matcher / eBay 路由一律不动)。
+ * 显示层归属 (与浏览树同源):
+ *   二级归属走 身份链 SubcategoryDisplayMap → DisplayBucket → DisplayCategory
+ *   (与 /api/parts/browse-tree 完全一致), 被"移到别的一级"的二级挂在新一级下。
+ *   - displayCategoryId=Y 过滤 → 只出该链下 bucket 属于 Y 的 (cat,sub); 隐藏
+ *     (displayBucketId=NULL) 和无桶映射的二级 bdc 为 NULL, 不入整级搜索。
+ *   - subCategoryId 过滤 → 精确 (cat,sub) 身份。
+ *   - 无 scope 的全局联想 → 维持原类目级隐藏 (类目在 CategoryDisplayMap 可见才出),
+ *     且不砍无桶映射的 (cat,sub) 的零件 (它们仍可全局联想到)。
+ *   CategoryDisplayMap 只作一级元数据兜底 (无桶映射时给个一级名), 不决定二级归属。
+ *   pcdbCategoryId / subCategoryId 仍是原始 PCdb id (eBay 路由 / 落库追踪不变)。
  *
- * 返回: [{ partId, partName, subCategoryId, subCategoryName,
- *          pcdbCategoryId, displayCategoryId, displayCategoryName }]
+ * 返回: [{ partId, partName, subCategoryId, subCategoryName, pcdbCategoryId,
+ *          displayCategoryId, displayCategoryName, bucketName }]
+ *   —— subCategoryName / displayCategoryName / bucketName 都走身份链, 和面包屑同源:
+ *      下拉小字拼成「一级 › 桶 › 二级短名」, 桶取不到时退回两段。
  */
 
 import { NextResponse } from "next/server";
@@ -31,10 +38,11 @@ type Row = {
   partId: number;
   partName: string;
   subCategoryId: number;
-  subCategoryName: string;
+  subCategoryName: string; // = COALESCE(SubcategoryDisplayMap.displayName, PcdbSubCategory.name)
   pcdbCategoryId: number;
   displayCategoryId: number;
-  displayCategoryName: string;
+  displayCategoryName: string; // 显示一级 (走身份链 bdc, 兜底 CategoryDisplayMap cdc)
+  bucketName: string | null; // DisplayBucket.name (无桶映射/隐藏时为 null)
 };
 
 // 精确匹配命中数低于此值 → 疑似拼写错误, 触发 trigram 模糊兜底
@@ -42,23 +50,54 @@ const FUZZY_TRIGGER = 5;
 // word_similarity 阈值: 只保留相似度高于此值的模糊候选
 const FUZZY_THRESHOLD = 0.3;
 
-// 两段查询共用的显示层 join + 选取字段 (隐藏一级由 INNER JOIN 天然剔除)
+// 两段查询共用的显示层 join + 选取字段。
+// 身份链 (bdc) 与浏览树同源, 决定二级归属; CategoryDisplayMap (cdc) 仅作兜底一级名。
+// 一律 LEFT JOIN —— 无桶映射的 (cat,sub) 不被砍, 靠 WHERE 的 scope 条件控制可见性。
 const SELECT_AND_JOINS = `
   SELECT
     p.id           AS "partId",
     p.name         AS "partName",
     sc.id          AS "subCategoryId",
-    sc.name        AS "subCategoryName",
+    COALESCE(sdm."displayName", sc.name) AS "subCategoryName",
     c.id           AS "pcdbCategoryId",
-    dc.id          AS "displayCategoryId",
-    dc.name        AS "displayCategoryName"
+    COALESCE(bdc.id, cdc.id)     AS "displayCategoryId",
+    COALESCE(bdc.name, cdc.name) AS "displayCategoryName",
+    db.name        AS "bucketName"
   FROM "PcdbPart" p
   JOIN "PcdbPartCategory" pc  ON pc."partId" = p.id
   JOIN "PcdbCategory" c       ON c.id = pc."categoryId"
   JOIN "PcdbSubCategory" sc   ON sc.id = pc."subCategoryId"
-  JOIN "CategoryDisplayMap" cdm ON cdm."pcdbCategoryId" = c.id
-  JOIN "DisplayCategory" dc     ON dc.id = cdm."displayCategoryId"
+  LEFT JOIN "SubcategoryDisplayMap" sdm
+    ON sdm."pcdbCategoryId" = pc."categoryId" AND sdm."pcdbSubCategoryId" = pc."subCategoryId"
+  LEFT JOIN "DisplayBucket" db     ON db.id = sdm."displayBucketId"
+  LEFT JOIN "DisplayCategory" bdc  ON bdc.id = db."displayCategoryId"
+  LEFT JOIN "CategoryDisplayMap" cdm ON cdm."pcdbCategoryId" = c.id
+  LEFT JOIN "DisplayCategory" cdc    ON cdc.id = cdm."displayCategoryId"
 `;
+
+// scope 过滤 (两段查询共用)。会往 params 里 push, 返回拼进 WHERE 的 AND 子句。
+//   displayCategoryId → 整级搜索: 走身份链 bdc (= 浏览树), 隐藏/无桶映射自然排除
+//   subCategoryId     → 精确二级身份
+//   都没有            → 全局联想: 维持原类目级隐藏 (类目在 CategoryDisplayMap 可见才出)
+function buildScopeFilter(
+  params: (string | number)[],
+  displayCategoryId: number | null,
+  subCategoryId: number | null
+): string {
+  const clauses: string[] = [];
+  if (displayCategoryId != null) {
+    params.push(displayCategoryId);
+    clauses.push(`AND bdc.id = $${params.length}`);
+  }
+  if (subCategoryId != null) {
+    params.push(subCategoryId);
+    clauses.push(`AND pc."subCategoryId" = $${params.length}`);
+  }
+  if (displayCategoryId == null && subCategoryId == null) {
+    clauses.push(`AND cdc.id IS NOT NULL`);
+  }
+  return clauses.join("\n    ");
+}
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
@@ -145,24 +184,14 @@ async function runExactQuery(
   params.push(`%${corePhrase}%`);
   const corePhrasePos = params.length;
 
-  let displayCategoryFilter = "";
-  if (displayCategoryId != null) {
-    params.push(displayCategoryId);
-    displayCategoryFilter = `AND dc.id = $${params.length}`;
-  }
-  let subCategoryFilter = "";
-  if (subCategoryId != null) {
-    params.push(subCategoryId);
-    subCategoryFilter = `AND pc."subCategoryId" = $${params.length}`;
-  }
+  const scopeFilter = buildScopeFilter(params, displayCategoryId, subCategoryId);
   params.push(limit);
   const limitPos = params.length;
 
   const sql = `
     ${SELECT_AND_JOINS}
     WHERE ${tokenConds.join(" AND ")}
-    ${displayCategoryFilter}
-    ${subCategoryFilter}
+    ${scopeFilter}
     ORDER BY
       -- 1. 连续核心短语匹配优先 (本体 "Bumper Cover" 在 "... Cover Nut" 之前)
       CASE WHEN p.name ILIKE $${corePhrasePos} THEN 0 ELSE 1 END,
@@ -198,16 +227,7 @@ async function runFuzzyQuery(
       ? `word_similarity($${tokenPos[0]}, p.name)`
       : `GREATEST(${tokenPos.map((i) => `word_similarity($${i}, p.name)`).join(", ")})`;
 
-  let displayCategoryFilter = "";
-  if (displayCategoryId != null) {
-    params.push(displayCategoryId);
-    displayCategoryFilter = `AND dc.id = $${params.length}`;
-  }
-  let subCategoryFilter = "";
-  if (subCategoryId != null) {
-    params.push(subCategoryId);
-    subCategoryFilter = `AND pc."subCategoryId" = $${params.length}`;
-  }
+  const scopeFilter = buildScopeFilter(params, displayCategoryId, subCategoryId);
 
   params.push(FUZZY_THRESHOLD);
   const threshPos = params.length;
@@ -217,8 +237,7 @@ async function runFuzzyQuery(
   const sql = `
     ${SELECT_AND_JOINS}
     WHERE (${matchConds})
-    ${displayCategoryFilter}
-    ${subCategoryFilter}
+    ${scopeFilter}
       AND ${simExpr} > $${threshPos}
     ORDER BY ${simExpr} DESC, length(p.name), p.name
     LIMIT $${limitPos}

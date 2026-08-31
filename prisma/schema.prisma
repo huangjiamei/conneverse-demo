@@ -644,6 +644,7 @@ model SubcategoryDisplayMap {
   displayBucketId   Int?                                    // 归入的桶；隐藏时为 NULL
   displayBucket     DisplayBucket? @relation(fields: [displayBucketId], references: [id], onDelete: SetNull)
   sortOrder         Int            @default(0)
+  displayName       String?
 
   @@id([pcdbCategoryId, pcdbSubCategoryId])                 // (一级,二级) 组合唯一 = 零件身份
   @@index([displayBucketId])
