@@ -1,0 +1,433 @@
+// VCdb 参考数据模型 (身份层 + 配置层)。scripts/import-vcdb*.ts / import-vcdb-config.py 灌数据。
+
+// ============================================================
+// VCdB 参考数据 (只读, 从 Auto Care Association VCdb 导入)
+// ============================================================
+model VcdbYear {
+  id           Int               @id // 对应 VCdb YearID (数值就是年份)
+  baseVehicles VcdbBaseVehicle[]
+}
+
+model VcdbMake {
+  id           Int               @id // 对应 VCdb MakeID
+  name         String // MakeName
+  baseVehicles VcdbBaseVehicle[]
+
+  @@index([name])
+}
+
+model VcdbModel {
+  id            Int               @id // 对应 VCdb ModelID
+  name          String // ModelName
+  vehicleTypeId Int // 5=Car, 6=Truck, 7=Van (只导这三种)
+  baseVehicles  VcdbBaseVehicle[]
+
+  @@index([name])
+  @@index([vehicleTypeId])
+}
+
+model VcdbSubModel {
+  id       Int           @id // 对应 VCdb SubModelID
+  name     String // SubModelName (e.g., "LE", "XLE")
+  vehicles VcdbVehicle[]
+}
+
+model VcdbBaseVehicle {
+  id       Int           @id // 对应 VCdb BaseVehicleID
+  yearId   Int // 直接存年份数字 (从 YearID)
+  makeId   Int
+  modelId  Int
+  year     VcdbYear      @relation(fields: [yearId], references: [id])
+  make     VcdbMake      @relation(fields: [makeId], references: [id])
+  model    VcdbModel     @relation(fields: [modelId], references: [id])
+  vehicles VcdbVehicle[]
+
+  @@index([yearId, makeId, modelId]) // 下拉选择器主索引
+  @@index([makeId, yearId])
+  @@index([yearId])
+}
+
+model VcdbVehicle {
+  id            Int             @id // 对应 VCdb VehicleID
+  baseVehicleId Int
+  subModelId    Int
+  baseVehicle   VcdbBaseVehicle @relation(fields: [baseVehicleId], references: [id])
+  subModel      VcdbSubModel    @relation(fields: [subModelId], references: [id])
+
+  @@index([baseVehicleId, subModelId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VCdb 配置层 (发动机/变速/驱动/刹车/车身/货箱/轴距/悬挂/转向/其它)
+//  当前 schema: 发动机走 "2" 后缀链 (EngineConfig2 → EngineBase2 → EngineBlock/BoreStroke)。
+//  只存原始 ID + 结构外键 (scalar, 不建 relation), 查询用 @@index。
+//  VehicleTo* 只导身份层保留的 Vehicle (vehicleTypeId 5/6/7)。scripts/import-vcdb-config.ts 灌数据。
+// ═══════════════════════════════════════════════════════════════
+
+model VcdbEngineBlock {
+  id Int @id
+  liter String?
+  cc String?
+  cid String?
+  cylinders String?
+  blockType String?
+}
+
+model VcdbEngineBoreStroke {
+  id Int @id
+  boreIn String?
+  boreMetric String?
+  strokeIn String?
+  strokeMetric String?
+}
+
+model VcdbEngineBase {
+  id Int @id
+  engineBlockId Int
+  engineBoreStrokeId Int
+  @@index([engineBlockId])
+}
+
+model VcdbAspiration {
+  id Int @id
+  name String
+}
+
+model VcdbCylinderHeadType {
+  id Int @id
+  name String
+}
+
+model VcdbFuelType {
+  id Int @id
+  name String
+}
+
+model VcdbFuelDeliveryType {
+  id Int @id
+  name String
+}
+
+model VcdbFuelDeliverySubType {
+  id Int @id
+  name String
+}
+
+model VcdbFuelSystemControlType {
+  id Int @id
+  name String
+}
+
+model VcdbFuelSystemDesign {
+  id Int @id
+  name String
+}
+
+model VcdbFuelDeliveryConfig {
+  id Int @id
+  fuelDeliveryTypeId Int
+  fuelDeliverySubTypeId Int
+  fuelSystemControlTypeId Int
+  fuelSystemDesignId Int
+  @@index([fuelDeliveryTypeId])
+}
+
+model VcdbIgnitionSystemType {
+  id Int @id
+  name String
+}
+
+model VcdbValves {
+  id Int @id
+  valvesPerEngine String?
+}
+
+model VcdbEngineDesignation {
+  id Int @id
+  name String
+}
+
+model VcdbEngineVin {
+  id Int @id
+  code String
+}
+
+model VcdbEngineVersion {
+  id Int @id
+  version String
+}
+
+model VcdbPowerOutput {
+  id Int @id
+  horsePower String?
+  kilowattPower String?
+}
+
+model VcdbMfr {
+  id Int @id
+  name String
+}
+
+model VcdbEngineConfig {
+  id Int @id
+  engineBaseId Int
+  engineBlockId Int
+  engineBoreStrokeId Int
+  aspirationId Int
+  cylinderHeadTypeId Int
+  fuelTypeId Int
+  fuelDeliveryConfigId Int
+  ignitionSystemTypeId Int
+  engineMfrId Int
+  engineVersionId Int
+  powerOutputId Int
+  engineDesignationId Int
+  engineVinId Int
+  valvesId Int
+  @@index([engineBaseId])
+}
+
+model VcdbTransmissionType {
+  id Int @id
+  name String
+}
+
+model VcdbTransmissionNumSpeeds {
+  id Int @id
+  speeds String
+}
+
+model VcdbTransmissionControlType {
+  id Int @id
+  name String
+}
+
+model VcdbTransmissionMfrCode {
+  id Int @id
+  code String
+}
+
+model VcdbElecControlled {
+  id Int @id
+  value String
+}
+
+model VcdbTransmissionBase {
+  id Int @id
+  transmissionTypeId Int
+  transmissionNumSpeedsId Int
+  transmissionControlTypeId Int
+  @@index([transmissionTypeId])
+}
+
+model VcdbTransmission {
+  id Int @id
+  transmissionBaseId Int
+  transmissionMfrCodeId Int
+  transmissionElecControlledId Int
+  transmissionMfrId Int
+  @@index([transmissionBaseId])
+}
+
+model VcdbDriveType {
+  id Int @id
+  name String
+}
+
+model VcdbBrakeType {
+  id Int @id
+  name String
+}
+
+model VcdbBrakeSystem {
+  id Int @id
+  name String
+}
+
+model VcdbBrakeAbs {
+  id Int @id
+  name String
+}
+
+model VcdbBrakeConfig {
+  id Int @id
+  frontBrakeTypeId Int
+  rearBrakeTypeId Int
+  brakeSystemId Int
+  brakeAbsId Int
+  @@index([frontBrakeTypeId])
+}
+
+model VcdbBodyType {
+  id Int @id
+  name String
+}
+
+model VcdbBodyNumDoors {
+  id Int @id
+  numDoors String
+}
+
+model VcdbBodyStyleConfig {
+  id Int @id
+  bodyNumDoorsId Int
+  bodyTypeId Int
+  @@index([bodyNumDoorsId])
+}
+
+model VcdbBedLength {
+  id Int @id
+  bedLength String?
+  bedLengthMetric String?
+}
+
+model VcdbBedType {
+  id Int @id
+  name String
+}
+
+model VcdbBedConfig {
+  id Int @id
+  bedLengthId Int
+  bedTypeId Int
+  @@index([bedLengthId])
+}
+
+model VcdbWheelBase {
+  id Int @id
+  wheelBase String?
+  wheelBaseMetric String?
+}
+
+model VcdbSpringType {
+  id Int @id
+  name String
+}
+
+model VcdbSpringTypeConfig {
+  id Int @id
+  frontSpringTypeId Int
+  rearSpringTypeId Int
+  @@index([frontSpringTypeId])
+}
+
+model VcdbSteeringType {
+  id Int @id
+  name String
+}
+
+model VcdbSteeringSystem {
+  id Int @id
+  name String
+}
+
+model VcdbSteeringConfig {
+  id Int @id
+  steeringTypeId Int
+  steeringSystemId Int
+  @@index([steeringTypeId])
+}
+
+model VcdbMfrBodyCode {
+  id Int @id
+  name String
+}
+
+model VcdbClass {
+  id Int @id
+  name String
+}
+
+model VcdbRegion {
+  id Int @id
+  abbr String?
+  name String?
+}
+
+model VcdbVehicleToEngineConfig {
+  id Int @id
+  vehicleId Int
+  engineConfigId Int
+  @@index([vehicleId])
+  @@index([engineConfigId])
+}
+
+model VcdbVehicleToTransmission {
+  id Int @id
+  vehicleId Int
+  transmissionId Int
+  @@index([vehicleId])
+  @@index([transmissionId])
+}
+
+model VcdbVehicleToDriveType {
+  id Int @id
+  vehicleId Int
+  driveTypeId Int
+  @@index([vehicleId])
+  @@index([driveTypeId])
+}
+
+model VcdbVehicleToBrakeConfig {
+  id Int @id
+  vehicleId Int
+  brakeConfigId Int
+  @@index([vehicleId])
+  @@index([brakeConfigId])
+}
+
+model VcdbVehicleToBodyStyleConfig {
+  id Int @id
+  vehicleId Int
+  bodyStyleConfigId Int
+  @@index([vehicleId])
+  @@index([bodyStyleConfigId])
+}
+
+model VcdbVehicleToBedConfig {
+  id Int @id
+  vehicleId Int
+  bedConfigId Int
+  @@index([vehicleId])
+  @@index([bedConfigId])
+}
+
+model VcdbVehicleToWheelBase {
+  id Int @id
+  vehicleId Int
+  wheelBaseId Int
+  @@index([vehicleId])
+  @@index([wheelBaseId])
+}
+
+model VcdbVehicleToSpringTypeConfig {
+  id Int @id
+  vehicleId Int
+  springTypeConfigId Int
+  @@index([vehicleId])
+  @@index([springTypeConfigId])
+}
+
+model VcdbVehicleToSteeringConfig {
+  id Int @id
+  vehicleId Int
+  steeringConfigId Int
+  @@index([vehicleId])
+  @@index([steeringConfigId])
+}
+
+model VcdbVehicleToMfrBodyCode {
+  id Int @id
+  vehicleId Int
+  mfrBodyCodeId Int
+  @@index([vehicleId])
+  @@index([mfrBodyCodeId])
+}
+
+model VcdbVehicleToClass {
+  id Int @id
+  vehicleId Int
+  classId Int
+  @@index([vehicleId])
+  @@index([classId])
+}

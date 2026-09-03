@@ -1,0 +1,12 @@
+// Conneverse database schema — generator + datasource (唯一一份)
+// 多文件 schema (prismaSchemaFolder, Prisma 7 GA)。领域模型见同目录其它 .prisma。
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pg_trgm]
+}

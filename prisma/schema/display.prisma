@@ -1,0 +1,56 @@
+// 显示层浏览分类: DisplayCategory / DisplayBucket / CategoryDisplayMap / SubcategoryDisplayMap。
+
+// ═══════════════════════════════════════════════════════════════
+//  一级目录调整，通过重命名、合并及隐藏的方减少一级目录
+// ═══════════════════════════════════════════════════════════════
+// ── 1.  17 个浏览一级 ──
+model DisplayCategory {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique          // "Brakes" / "Drivetrain" ...
+  slug      String?  @unique           // 可选,给 URL 用
+  sortOrder Int      @default(0)       // 菜单排序
+
+  categoryMaps CategoryDisplayMap[]
+  buckets      DisplayBucket[]
+}
+
+// ── 2. PCdb 原一级 → 显示一级 的映射(合并/改名/隐藏都在这) ──
+model CategoryDisplayMap {
+  pcdbCategoryId    Int  @id           // 一对一,指向 PcdbCategory.id
+  displayCategoryId Int?               // NULL = 隐藏(browsable=false)
+
+  displayCategory DisplayCategory? @relation(fields: [displayCategoryId], references: [id])
+  pcdbCategory    PcdbCategory     @relation(fields: [pcdbCategoryId], references: [id])
+}
+
+// ============================================================
+// 二级显示映射：在现有一级之上，加"桶"和"(cat,sub)→桶"两张表
+// 不改动任何 PCdb 原表。eBay 路由仍走原始 (categoryId, subCategoryId)。
+// ============================================================
+// —— 1. 展示桶（新的浏览第二层，~150 个） ——
+model DisplayBucket {
+  id                Int             @id @default(autoincrement())
+  name              String                                  // 如 "Brake Pads and Shoes"
+  displayCategoryId Int                                     // 属于哪个显示一级
+  displayCategory   DisplayCategory @relation(fields: [displayCategoryId], references: [id], onDelete: Cascade)
+  sortOrder         Int             @default(0)             // 菜单内排序
+
+  subcategoryMaps   SubcategoryDisplayMap[]
+
+  @@unique([displayCategoryId, name])                       // 同一级下桶名唯一
+  @@index([displayCategoryId])
+}
+
+// —— 2.(二级 -> 桶) 映射核心，669 行；主键=(一级,二级) 身份） ——
+model SubcategoryDisplayMap {
+  pcdbCategoryId    Int                                     // 原始一级 categoryId
+  pcdbSubCategoryId Int                                     // 原始二级 subCategoryId
+  displayBucketId   Int?                                    // 归入的桶；隐藏时为 NULL
+  displayBucket     DisplayBucket? @relation(fields: [displayBucketId], references: [id], onDelete: SetNull)
+  sortOrder         Int            @default(0)
+  displayName       String?
+
+  @@id([pcdbCategoryId, pcdbSubCategoryId])                 // (一级,二级) 组合唯一 = 零件身份
+  @@index([displayBucketId])
+  @@index([pcdbSubCategoryId])
+}

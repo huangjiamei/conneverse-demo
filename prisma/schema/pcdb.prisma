@@ -1,0 +1,81 @@
+// PCdb 零件术语模型 + PcdbToEbayMapping + eBay 类目树 (EbayCategory)。
+
+// ═══════════════════════════════════════════════════════════════
+//  PCdb REFERENCE (Auto Care Parts Terminology)
+//  从本地 MySQL PCdb 导入。Category ↔ SubCategory 通过 PartCategory
+//  关联表 (多对多)。scripts/import-pcdb.ts 灌数据。
+// ═══════════════════════════════════════════════════════════════
+
+model PcdbCategory {
+  id             Int                @id // CategoryID
+  name           String // CategoryName
+  partCategories PcdbPartCategory[]
+  displayMap CategoryDisplayMap?
+
+  @@index([name])
+}
+
+model PcdbSubCategory {
+  id             Int                @id // SubCategoryID
+  name           String // SubCategoryName
+  partCategories PcdbPartCategory[]
+  mapping        PcdbToEbayMapping?
+
+  @@index([name])
+}
+
+// PCdb SubCategory → eBay category 映射 (初稿, 人工 + LLM 生成)
+model PcdbToEbayMapping {
+  id              Int             @id @default(autoincrement())
+  subCategoryId   Int             @unique
+  primaryEbayId   Int? // 可空 (none 类型无映射)
+  fallbackEbayIds Int[]           @default([]) // 备选 eBay categoryId 数组
+  confidence      String // high / medium / low / none
+  note            String?
+  subCategory     PcdbSubCategory @relation(fields: [subCategoryId], references: [id])
+
+  @@index([subCategoryId])
+}
+
+model PcdbPart {
+  id             Int                @id // PartTerminologyID
+  name           String // PartTerminologyName
+  partCategories PcdbPartCategory[]
+
+  @@index([name])
+  // pg_trgm gin 索引, 给 /api/parts/search 的 fuzzy (similarity/ILIKE) 提速
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, name: "idx_pcdbpart_name_trgm")
+}
+
+model PcdbPartCategory {
+  id            Int             @id @default(autoincrement())
+  partId        Int
+  categoryId    Int
+  subCategoryId Int
+  part          PcdbPart        @relation(fields: [partId], references: [id])
+  category      PcdbCategory    @relation(fields: [categoryId], references: [id])
+  subCategory   PcdbSubCategory @relation(fields: [subCategoryId], references: [id])
+
+  @@unique([partId, categoryId, subCategoryId])
+  @@index([categoryId, subCategoryId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  eBAY TAXONOMY (Motors > Parts & Accessories 子树)
+//  matcher GET /api/taxonomy 拉, scripts/import-ebay-taxonomy.ts 灌。
+//  自引用树: level 0 = 拉取的 root (6028)。
+// ═══════════════════════════════════════════════════════════════
+
+model EbayCategory {
+  id       Int            @id // eBay categoryId
+  name     String // categoryName
+  parentId Int? // null = 拉取的 root (其真实 parent 在子树外)
+  level    Int // 相对 root 的深度, root = 0
+  fullPath String // "eBay Motors|Parts & Accessories|..."
+  isLeaf   Boolean // 可挂 listing 的叶子分类
+  parent   EbayCategory?  @relation("EbayCategoryParent", fields: [parentId], references: [id])
+  children EbayCategory[] @relation("EbayCategoryParent")
+
+  @@index([parentId])
+  @@index([name])
+}
