@@ -24,6 +24,20 @@ model PcdbSubCategory {
   @@index([name])
 }
 
+// ── PCdb 位置 (Position 消歧) ──
+model PcdbPosition {
+  id       Int    @id  // PositionID
+  position String       // "Front" / "Rear" / "Left" ...
+}
+
+model PcdbPartPosition {
+  id                Int @id  // PartPositionID
+  partTerminologyId Int      // → PcdbPart.id
+  positionId        Int      // → PcdbPosition.id
+  @@index([partTerminologyId])
+  @@index([positionId])
+}
+
 // PCdb SubCategory → eBay category 映射 (初稿, 人工 + LLM 生成)
 model PcdbToEbayMapping {
   id              Int             @id @default(autoincrement())

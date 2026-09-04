@@ -1,2 +1,57 @@
-// PAdb 零件属性模型 (占位)。
-// 当前库里还没有 Padb* 模型 —— PAdb 导入落地后, 把 Padb* 模型放这里。
+// ═══════════════════════════════════════════════════════════════
+//  PAdb REFERENCE (Auto Care Part Attribute Database)
+//  属性词表 + 合法取值 + 适用关系。桥: PartAttributeAssignment.partTerminologyId → PcdbPart.id
+//  参考表: scalar + index, 手写 join, 不建 relation (同 VCdb 配置层)。
+//  从本地 MySQL 导入, scripts/import-padb.ts 灌数据。
+// ═══════════════════════════════════════════════════════════════
+
+model PadbPartAttribute {
+  id          Int     @id  // PAID
+  name        String       // PAName
+  description String?       // PADescription
+  @@index([name])
+}
+
+model PadbMetaData {
+  id       Int     @id     // MetaID
+  name     String          // MetaName
+  dataType String?         // DataType
+}
+
+model PadbValidValue {
+  id    Int    @id         // ValidValueID
+  value String             // ValidValue
+  @@index([value])
+}
+
+model PadbMetaUom {
+  id                 Int     @id  // MetaUOMID
+  uomCode            String?       // UOMCode
+  uomLabel           String?       // UOMLabel
+  measurementGroupId Int?
+}
+
+// 核心桥: 一行 = 某零件术语 × 某属性 (PAPTID 唯一)
+model PadbPartAttributeAssignment {
+  id                Int @id  // PAPTID
+  partTerminologyId Int      // → PcdbPart.id
+  paid              Int      // → PadbPartAttribute.id
+  metaId            Int      // → PadbMetaData.id
+  @@index([partTerminologyId])
+  @@index([paid])
+}
+
+model PadbValidValueAssignment {
+  id           Int @id  // ValidValueAssignmentID
+  paptid       Int      // → PadbPartAttributeAssignment.id
+  validValueId Int      // → PadbValidValue.id
+  @@index([paptid])
+  @@index([validValueId])
+}
+
+model PadbMetaUomAssignment {
+  id        Int @id  // MetaUOMCodeAssignmentID
+  paptid    Int      // → PadbPartAttributeAssignment.id
+  metaUomId Int      // → PadbMetaUom.id
+  @@index([paptid])
+}
