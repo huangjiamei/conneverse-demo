@@ -71,6 +71,8 @@ type MatcherCandidate = {
   image_url?: string | null;
   additional_image_urls?: string[];
   part_number_list?: string[];
+  part_numbers_classified?: Record<string, string[]>;
+  specs?: Record<string, string>;
 };
 
 type OptimizerResult = {
@@ -310,6 +312,8 @@ export async function POST(req: Request) {
   const compatByItemId = new Map<string, Record<string, unknown>>();
   const additionalImagesByItemId = new Map<string, string[]>();
   const partNumbersByItemId = new Map<string, string[]>();
+  const classifiedPnByItemId = new Map<string, Record<string, string[]>>();
+  const specsByItemId = new Map<string, Record<string, string>>();
   for (const c of candidates) {
     if (!c.item_id) continue;
     if (c.optimizer_fields) enrichedByItemId.set(c.item_id, c.optimizer_fields);
@@ -323,6 +327,8 @@ export async function POST(req: Request) {
     if (c.part_number_list?.length) {
       partNumbersByItemId.set(c.item_id, c.part_number_list);
     }
+    if (c.part_numbers_classified) classifiedPnByItemId.set(c.item_id, c.part_numbers_classified);
+    if (c.specs) specsByItemId.set(c.item_id, c.specs);
   }
 
   // 落库: 独立搜索的 MatchSearch, partLineId=null。
@@ -435,6 +441,8 @@ export async function POST(req: Request) {
         compatibility: compatByItemId.get(c.ebayItemId) ?? null,
         additionalImageUrls: additionalImagesByItemId.get(c.ebayItemId) ?? [],
         partNumbers: partNumbersByItemId.get(c.ebayItemId) ?? [],
+        partNumbersClassified: classifiedPnByItemId.get(c.ebayItemId) ?? null,
+        specs: specsByItemId.get(c.ebayItemId) ?? null,
         pickInPresets: pickMap.get(c.id) ?? [],
         isAdmin: session.role === "PLATFORM_ADMIN",
       })

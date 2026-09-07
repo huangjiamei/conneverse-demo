@@ -27,6 +27,8 @@ type RawCandidate = {
   optimizer_fields?: EnrichedFields;
   additional_image_urls?: string[];
   part_number_list?: string[];
+  part_numbers_classified?: Record<string, string[]>;
+  specs?: Record<string, string>;
 };
 
 export default async function HistoryDetailPage({
@@ -115,6 +117,8 @@ export default async function HistoryDetailPage({
       compatibility: (raw?.compatibility as Record<string, unknown>) ?? null,
       additionalImageUrls: raw?.additional_image_urls ?? [],
       partNumbers: raw?.part_number_list ?? [],
+      partNumbersClassified: raw?.part_numbers_classified ?? null,
+      specs: raw?.specs ?? null,
       pickInPresets: pickMap.get(c.id) ?? [],
     };
   });

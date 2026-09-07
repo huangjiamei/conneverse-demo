@@ -56,6 +56,8 @@ type RawCandidate = {
   optimizer_fields?: MatcherOptimizerFields;
   additional_image_urls?: string[];
   part_number_list?: string[];
+  part_numbers_classified?: Record<string, string[]>;
+  specs?: Record<string, string>;
 };
 
 type RerankResult = {
@@ -351,6 +353,8 @@ export async function POST(req: Request) {
         compatibility: (rawC?.compatibility as Record<string, unknown>) ?? null,
         additionalImageUrls: rawC?.additional_image_urls ?? [],
         partNumbers: rawC?.part_number_list ?? [],
+        partNumbersClassified: rawC?.part_numbers_classified ?? null,
+        specs: rawC?.specs ?? null,
         pickInPresets: pickMap.get(c.id) ?? [],
         isAdmin: session.role === "PLATFORM_ADMIN",
       });

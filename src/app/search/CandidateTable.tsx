@@ -356,7 +356,7 @@ export function CandidateTable({
                 {isOpen && (
                   <tr className={isTopPick ? "bg-teal-50/30" : "bg-gray-50/60"}>
                     <td colSpan={9} className="px-3 py-4 border-b border-gray-100">
-                      <CandidateDetail candidate={c} />
+                      <CandidateDetail candidate={c} variant="admin" />
                     </td>
                   </tr>
                 )}

@@ -13,7 +13,7 @@
 import { useState } from "react";
 import {
   Check, ExternalLink, Award, ChevronDown, ChevronUp,
-  Truck, Star, Shield, RotateCcw, Package, Boxes,
+  Truck, Star, RotateCcw, Package, Boxes,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -74,9 +74,61 @@ export type Candidate = {
   // 从 eBay localizedAspects 抽的零件号 (MPN/OE/Interchange 混合的扁平列表,
   // matcher 的 part_number_list —— 类型已在抽取时合并, 不分 MPN/OE/Interchange)。
   partNumbers?: string[];
+  // 分类零件号 (matcher part_numbers_classified): key = oe/mpn/interchange/superseded, 已清洗去重。
+  partNumbersClassified?: Record<string, string[]> | null;
+  // 规格 (matcher specs): aspect 原英文名 -> 值 (Type/Material/尺寸类…)。
+  specs?: Record<string, string> | null;
   // 该候选在哪些 preset 下是 Rank 1 (从 OptimizerResult 表算)。用于 pick tag。
   pickInPresets?: string[];
 };
+
+// 分类零件号的展示顺序 + 英文标签 (key 来自 matcher part_numbers_classified)。
+export const PN_LABELS: [string, string][] = [
+  ["oe", "OE / OEM"],
+  ["mpn", "MPN"],
+  ["interchange", "Interchange"],
+  ["superseded", "Superseded"],
+];
+
+/**
+ * 跨类去重 (仅 user 展示用; admin 不调, 保留完整 4 类含重复)。
+ * 归一化 (去空格/连字符 + 大写) 后按优先级 OE/OEM > MPN > Interchange > Superseded 保留一次:
+ * 值相同只留高优先级那类; 值不同全保留 (副厂 MPN ≠ OE, 照常单独显示)。标签不合并, 展示值用清洗原写法。
+ */
+export function dedupeClassifiedPns(
+  classified: Record<string, string[]> | null | undefined
+): Record<string, string[]> | null {
+  if (!classified) return null;
+  const seen = new Set<string>();
+  const out: Record<string, string[]> = {};
+  for (const [key] of PN_LABELS) {
+    // PN_LABELS 顺序即优先级 (oe > mpn > interchange > superseded)
+    const vals = classified[key];
+    if (!vals) continue;
+    const kept: string[] = [];
+    for (const v of vals) {
+      const norm = v.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      kept.push(v);
+    }
+    if (kept.length) out[key] = kept;
+  }
+  return out;
+}
+
+/** 把 partNumbersClassified 摊成有序的 [label, values[]] 行 (只留有值的)。 */
+export function classifiedPnRows(
+  classified: Record<string, string[]> | null | undefined
+): [string, string[]][] {
+  if (!classified) return [];
+  const rows: [string, string[]][] = [];
+  for (const [key, label] of PN_LABELS) {
+    const vals = classified[key];
+    if (vals && vals.length) rows.push([label, vals]);
+  }
+  return rows;
+}
 
 // ============================================================
 // Helpers
@@ -212,10 +264,13 @@ export function humanizeGateReason(
 export function CandidateCard({
   candidate,
   searchedAt,
+  variant = "user",
 }: {
   candidate: Candidate;
   /** 该次搜索的 createdAt —— 到货天数相对它算,不能用「现在」 */
   searchedAt: string | Date | null;
+  /** 传给展开详情 CandidateDetail: admin 显示全字段, user 只三块。 */
+  variant?: "user" | "admin";
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -237,7 +292,6 @@ export function CandidateCard({
     ef.delivery_max_date,
     searchedAt
   );
-  const warranty = formatWarranty(ef.warranty_raw);
   const country = ef.country ?? null;
 
   return (
@@ -351,12 +405,6 @@ export function CandidateCard({
                   {delivery}
                 </span>
               )}
-              {warranty && (
-                <span className="inline-flex items-center gap-0.5" title="Warranty">
-                  <Shield size={11} />
-                  {warranty}
-                </span>
-              )}
               {country && country !== "US" && (
                 <span
                   className="inline-flex items-center gap-0.5 text-amber-600"
@@ -423,7 +471,7 @@ export function CandidateCard({
       */}
       {expanded && (
         <div className="absolute left-0 right-0 top-full z-20 -mt-px rounded-b-lg border border-gray-200 bg-gray-50 shadow-lg px-4 py-3 max-h-[320px] overflow-y-auto">
-          <CandidateDetail candidate={candidate} />
+          <CandidateDetail candidate={candidate} variant={variant} />
         </div>
       )}
     </div>
@@ -454,7 +502,14 @@ function DetailBlock({
   );
 }
 
-export function CandidateDetail({ candidate }: { candidate: Candidate }) {
+export function CandidateDetail({
+  candidate,
+  variant = "user",
+}: {
+  candidate: Candidate;
+  /** user = 只显新三块; admin = 三块 + 原有全部 (Seller/Purchase/Warranty/标价/View on eBay/label source)。 */
+  variant?: "user" | "admin";
+}) {
   const ef = candidate.enrichedFields || {};
   const sellerPct = parseSellerPct(ef.seller_feedback_pct);
   const sellerCount = ef.seller_feedback_count ?? null;
@@ -462,7 +517,13 @@ export function CandidateDetail({ candidate }: { candidate: Candidate }) {
   const compatEntries = candidate.compatibility
     ? Object.entries(candidate.compatibility).filter(([k]) => k !== "categoryPath")
     : [];
-  const partNumbers = candidate.partNumbers ?? [];
+  // user 视图跨类去重; admin 保留完整 4 类 (含调试用的重复)。
+  const pnRows = classifiedPnRows(
+    variant === "admin"
+      ? candidate.partNumbersClassified
+      : dedupeClassifiedPns(candidate.partNumbersClassified)
+  );
+  const specEntries = candidate.specs ? Object.entries(candidate.specs) : [];
 
   // 画廊: 主图 + 附加图 全塞进一个数组 (去重, 去空)。缩略图条即画廊。
   const images = Array.from(
@@ -553,11 +614,31 @@ export function CandidateDetail({ candidate }: { candidate: Candidate }) {
           <div className="text-[13px] font-medium text-[#1A1A2E] leading-snug">
             {candidate.title}
           </div>
-          <ViewOnSupplier
-            itemUrl={candidate.itemUrl}
-            className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-gray-400 hover:text-[#00B4A6] transition whitespace-nowrap"
-          />
+          {variant === "admin" && (
+            <ViewOnSupplier
+              itemUrl={candidate.itemUrl}
+              className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-gray-400 hover:text-[#00B4A6] transition whitespace-nowrap"
+            />
+          )}
         </div>
+
+        {pnRows.length > 0 && (
+          <DetailBlock label="Part Numbers">
+            <div className="space-y-0.5">
+              {pnRows.map(([label, vals]) => (
+                <div key={label} className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-24">{label}:</span>
+                  <span className="font-mono text-gray-700 break-all">
+                    {vals.slice(0, 8).join("  ·  ")}
+                    {vals.length > 8 && (
+                      <span className="font-sans text-gray-400"> +{vals.length - 8} more</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </DetailBlock>
+        )}
 
         {compatEntries.length > 0 && (
           <DetailBlock label="Compatibility">
@@ -571,27 +652,40 @@ export function CandidateDetail({ candidate }: { candidate: Candidate }) {
           </DetailBlock>
         )}
 
-        {partNumbers.length > 0 && (
-          <DetailBlock label="Part numbers">
-            <div className="flex flex-wrap gap-1">
-              {partNumbers.slice(0, 12).map((pn) => (
-                <span
-                  key={pn}
-                  className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-mono"
-                >
-                  {pn}
-                </span>
+        {specEntries.length > 0 && (
+          <DetailBlock label="Specs">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {specEntries.map(([k, v]) => (
+                <div key={k}>
+                  <span className="text-gray-400">{k}:</span> {String(v)}
+                </div>
               ))}
-              {partNumbers.length > 12 && (
-                <span className="inline-flex items-center px-1 py-0.5 text-[11px] text-gray-400">
-                  +{partNumbers.length - 12} more
-                </span>
-              )}
             </div>
           </DetailBlock>
         )}
 
-        <DetailBlock label="Seller">
+        {variant === "admin" && (
+          <>
+            <DetailBlock label="Listing">
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                {candidate.labelSource && (
+                  <div>
+                    <span className="text-gray-400">Match:</span> {candidate.labelSource}
+                  </div>
+                )}
+                <div>
+                  <span className="text-gray-400">Warranty:</span>{" "}
+                  {formatWarranty(ef.warranty_raw) ?? "—"}
+                </div>
+                {candidate.price != null && (
+                  <div>
+                    <span className="text-gray-400">Item price:</span> ${candidate.price}
+                  </div>
+                )}
+              </div>
+            </DetailBlock>
+
+            <DetailBlock label="Seller">
           <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1">
             <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-medium">
               eBay store
@@ -663,7 +757,9 @@ export function CandidateDetail({ candidate }: { candidate: Candidate }) {
               <span>Shipping: ${Number(ef.shipping_cost).toFixed(2)}</span>
             )}
           </div>
-        </DetailBlock>
+            </DetailBlock>
+          </>
+        )}
       </div>
     </div>
   );

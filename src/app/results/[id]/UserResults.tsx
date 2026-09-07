@@ -17,7 +17,8 @@ import { ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import {
   type Candidate,
   formatDeliveryRange,
-  formatWarranty,
+  classifiedPnRows,
+  dedupeClassifiedPns,
 } from "@/components/CandidateCard";
 import { PlaceOrderButton } from "@/components/PlaceOrderButton";
 import type { OrderingContext } from "@/lib/userResultsData";
@@ -188,8 +189,10 @@ function ExpandedCard({
       ? candidate.compatibility.Brand.trim()
       : "";
   const brand = brandRaw.toLowerCase() === "unbranded" ? "" : brandRaw;
-  const pns = candidate.partNumbers ?? [];
-  const warranty = formatWarranty(candidate.enrichedFields?.warranty_raw);
+  const pnRows = classifiedPnRows(
+    dedupeClassifiedPns(candidate.partNumbersClassified)
+  );
+  const specEntries = candidate.specs ? Object.entries(candidate.specs) : [];
   const bm = badge ? BADGE_META[badge] : null;
 
   return (
@@ -213,6 +216,24 @@ function ExpandedCard({
           {candidate.title}
         </div>
 
+        {pnRows.length > 0 && (
+          <Section label="Part Numbers">
+            <div className="space-y-0.5 text-[13px]">
+              {pnRows.map(([label, vals]) => (
+                <div key={label} className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-24">{label}:</span>
+                  <span className="font-mono text-gray-700 break-all">
+                    {vals.slice(0, 8).join("  ·  ")}
+                    {vals.length > 8 && (
+                      <span className="font-sans text-gray-400"> +{vals.length - 8} more</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         {compat.length > 0 && (
           <Section label="Compatibility">
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-gray-700">
@@ -225,13 +246,14 @@ function ExpandedCard({
           </Section>
         )}
 
-        {pns.length > 0 && (
-          <Section label="Part numbers">
-            <div className="text-[13px] text-gray-700">
-              {pns.slice(0, 6).join(" · ")}
-              {pns.length > 6 && (
-                <span className="text-gray-400"> +{pns.length - 6} more</span>
-              )}
+        {specEntries.length > 0 && (
+          <Section label="Specs">
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-gray-700">
+              {specEntries.map(([k, v]) => (
+                <span key={k}>
+                  <span className="text-gray-400">{k}:</span> {String(v)}
+                </span>
+              ))}
             </div>
           </Section>
         )}
@@ -246,9 +268,6 @@ function ExpandedCard({
             <span>
               <span className="text-gray-400">Condition:</span>{" "}
               {candidate.condition ?? "—"}
-            </span>
-            <span>
-              <span className="text-gray-400">Warranty:</span> {warranty ?? "—"}
             </span>
             <span>
               <span className="text-gray-400">Returns:</span>{" "}

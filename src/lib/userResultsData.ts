@@ -59,6 +59,8 @@ type RawCandidate = {
   optimizer_fields?: EnrichedFields;
   additional_image_urls?: string[];
   part_number_list?: string[];
+  part_numbers_classified?: Record<string, string[]>;
+  specs?: Record<string, string>;
 };
 
 const RANKED_PRESETS = ["Budget", "Rush", "Balanced"] as const;
@@ -122,6 +124,8 @@ export function buildClientCandidate(args: {
   compatibility: Record<string, unknown> | null;
   additionalImageUrls: string[];
   partNumbers: string[];
+  partNumbersClassified: Record<string, string[]> | null;
+  specs: Record<string, string> | null;
   pickInPresets: string[];
   isAdmin: boolean;
 }): Candidate {
@@ -150,6 +154,8 @@ export function buildClientCandidate(args: {
     compatibility: args.compatibility,
     additionalImageUrls: args.additionalImageUrls,
     partNumbers: args.partNumbers,
+    partNumbersClassified: args.partNumbersClassified,
+    specs: args.specs,
     pickInPresets: args.pickInPresets,
 
     // 店铺所见即所付
@@ -182,6 +188,8 @@ function fromRaw(
     compatibility: (raw?.compatibility as Record<string, unknown>) ?? null,
     additionalImageUrls: raw?.additional_image_urls ?? [],
     partNumbers: raw?.part_number_list ?? [],
+    partNumbersClassified: raw?.part_numbers_classified ?? null,
+    specs: raw?.specs ?? null,
     pickInPresets,
     isAdmin,
   });

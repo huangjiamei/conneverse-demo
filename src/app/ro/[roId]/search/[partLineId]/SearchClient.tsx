@@ -374,6 +374,7 @@ export default function SearchClient({
                   key={c.id}
                   candidate={c}
                   searchedAt={result.createdAt}
+                  variant="admin"
                 />
               ))}
             </div>
@@ -398,6 +399,7 @@ export default function SearchClient({
                   key={c.id}
                   candidate={c}
                   searchedAt={result.createdAt}
+                  variant="admin"
                 />
                   ))}
                 </div>
