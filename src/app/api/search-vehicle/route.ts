@@ -413,6 +413,9 @@ export async function POST(req: Request) {
     })),
     rawList: candidates,
     currentPreset: preset,
+    // 软信号排序: 让预热的其余 preset 与主 preset 用同一份 engine/drive
+    engine: body.engine ?? "",
+    drive: body.drive ?? "",
   });
 
   // 预热写完 4 个 preset 后, 算每个 candidate 在哪些 preset 下是 Rank 1

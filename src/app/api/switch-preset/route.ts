@@ -155,8 +155,11 @@ export async function POST(req: Request) {
     // 缓存未命中: 调 matcher rerank
     const raw = matchSearch.rawResponse as {
       candidate_info_list?: RawCandidate[];
+      source_part_info?: { vehicle?: { engine?: string; drive?: string } };
     };
     const rawList = raw?.candidate_info_list ?? [];
+    // engine/drive 从落库的 rawResponse 里取 (搜索时透传进来的), 让重跑的软信号排序与预热一致
+    const vehicle = raw?.source_part_info?.vehicle ?? {};
 
     // 组装 matcher rerank 请求 body
     const rerankBody = {
@@ -170,6 +173,8 @@ export async function POST(req: Request) {
         optimizer_fields: c.optimizer_fields ?? null,
       })),
       preset,
+      engine: vehicle.engine ?? "",
+      drive: vehicle.drive ?? "",
     };
 
     let rerankRes: Response;

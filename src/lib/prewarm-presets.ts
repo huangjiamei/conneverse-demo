@@ -57,8 +57,11 @@ export async function prewarmOtherPresets(opts: {
   candidates: { id: string; ebayItemId: string }[];
   rawList: RawCandidate[];
   currentPreset: string;
+  /** 用户选的发动机/驱动 —— 传给 rerank 做软信号排序, 让预热的 3 个 preset 与主 preset 一致 */
+  engine?: string;
+  drive?: string;
 }): Promise<void> {
-  const { matchSearchId, candidates, rawList, currentPreset } = opts;
+  const { matchSearchId, candidates, rawList, currentPreset, engine, drive } = opts;
 
   const others = ALL_PRESETS.filter((p) => p !== currentPreset);
 
@@ -80,7 +83,12 @@ export async function prewarmOtherPresets(opts: {
         const res = await fetch(`${MATCHER_URL}/api/rerank`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ candidates: rerankCandidates, preset }),
+          body: JSON.stringify({
+            candidates: rerankCandidates,
+            preset,
+            engine: engine ?? "",
+            drive: drive ?? "",
+          }),
         });
         if (!res.ok) return; // best-effort
 
