@@ -234,6 +234,10 @@ export default function VehicleSearchClient({
   const [freeTextMode, setFreeTextMode] = useState(false);
   // 最终选中 (选了 Part → id 有值; 自由文本 → null)。子类/大类走 scope + source。
   const [selectedPartId, setSelectedPartId] = useState<number | null>(null);
+  // 结构化位置 (Position): 选到具体 Part 且该件型有方向性位置时才有候选 + 显示选择器。
+  // partPositions = 该件型的合法位置 (来自 PCdb 预算表); selectedPositions = 用户多选。
+  const [partPositions, setPartPositions] = useState<string[]>([]);
+  const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
 
   // Year 预取
   useEffect(() => {
@@ -334,6 +338,28 @@ export default function VehicleSearchClient({
     }, 300);
     return () => clearTimeout(t);
   }, [partDescription, selectedPartId, freeTextMode, scopeCat, scopeSub]);
+
+  // 选到具体 Part (有 PartTerminologyID) → 查该件型的合法方向性位置 (PCdb 预算表, 零 DB)。
+  // 有方向性位置才显示位置选择器; 只 N/A / 查不到 → 空 → 不显示 (如散热器不弹前后)。
+  useEffect(() => {
+    setSelectedPositions([]); // 换件即清空已选位置
+    if (selectedPartId == null) {
+      setPartPositions([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/parts/positions?partId=${selectedPartId}`)
+      .then((r) => r.json())
+      .then((d: { positions?: string[] }) => {
+        if (!cancelled) setPartPositions(Array.isArray(d.positions) ? d.positions : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPartPositions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPartId]);
 
   // 级联菜单: 展开/折叠某显示一级看它的桶 (accordion, 一次一个)。整棵树已预取, 不再请求。
   // 换一级时顺手收起已展开的桶。不提交范围。
@@ -768,6 +794,8 @@ export default function VehicleSearchClient({
             : { baseVehicleId: subSelection.baseVehicleId }),
           ...(selectedEngine ? { engine: selectedEngine.label } : {}),
           ...(selectedDrive ? { drive: selectedDrive.label } : {}),
+          // 结构化位置 (选了才带) → 位置软信号排序
+          ...(selectedPositions.length > 0 ? { position: selectedPositions } : {}),
           partDescription,
           partNumber: partNumber || null,
           preset,
@@ -1471,6 +1499,41 @@ export default function VehicleSearchClient({
                       </div>
                     )
                   ) : null}
+                </div>
+              )}
+
+              {/* 结构化位置 (Position): 选到具体 Part 且该件型有方向性位置时才显示 (门控)。
+                  多选; 只影响排序软信号 (对上↑/冲突↓/没写不动), 不删不漏。可不选。 */}
+              {selectedPartId != null && partPositions.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">
+                    Position{" "}
+                    <span className="normal-case text-gray-400">(optional — helps rank fitment)</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {partPositions.map((pos) => {
+                      const on = selectedPositions.includes(pos);
+                      return (
+                        <button
+                          key={pos}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() =>
+                            setSelectedPositions((prev) =>
+                              on ? prev.filter((p) => p !== pos) : [...prev, pos]
+                            )
+                          }
+                          className={`px-3 py-1 rounded-full border text-[13px] transition ${
+                            on
+                              ? "border-[#00B4A6] bg-teal-50 text-teal-700 font-medium"
+                              : "border-gray-200 text-gray-600 hover:border-gray-300"
+                          }`}
+                        >
+                          {pos}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

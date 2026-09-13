@@ -35,6 +35,8 @@ type Body = {
   // 本阶段 matcher 收下但不使用 (不进任何 lane / compat 闸)。
   engine?: string | null;
   drive?: string | null;
+  // 结构化位置 (选到具体 Part 且该件型有方向性位置时才带), 如 ["Front"]。只用于位置软信号排序。
+  position?: string[] | null;
   partDescription?: string;
   partNumber?: string | null;
   preset?: string;
@@ -230,6 +232,9 @@ export async function POST(req: Request) {
     },
     part_description: partDescription ?? "",
     part_type: "",
+    // 结构化位置 + 件型 id → 位置软信号排序 (matcher optimizer 用; 空数组=没选/不适用)
+    position: body.position ?? [],
+    part_terminology_id: body.pcdbPartId ?? null,
     part_number: partNumber ?? "",
   };
 
@@ -413,9 +418,10 @@ export async function POST(req: Request) {
     })),
     rawList: candidates,
     currentPreset: preset,
-    // 软信号排序: 让预热的其余 preset 与主 preset 用同一份 engine/drive
+    // 软信号排序: 让预热的其余 preset 与主 preset 用同一份 engine/drive/position
     engine: body.engine ?? "",
     drive: body.drive ?? "",
+    position: body.position ?? [],
   });
 
   // 预热写完 4 个 preset 后, 算每个 candidate 在哪些 preset 下是 Rank 1
