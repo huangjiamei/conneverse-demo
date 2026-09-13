@@ -23,6 +23,11 @@ export type VpicDecode = {
   series: string | null;
   trim: string | null;
   bodyClass: string | null;
+  /** 发动机结构分量: 只用于前端把 VIN 唯一匹配到 VCdb 的某个 engine 做预选,
+   *  不参与 make/model 解析 (VCdb model 不锁 engine)。 */
+  displacementL: string | null;
+  engineCylinders: string | null;
+  fuelType: string | null;
   /** vPIC 自己的错误码, "0" = 干净解码; 多个码用逗号分隔 */
   errorCode: string;
   errorText: string;
@@ -113,6 +118,9 @@ export async function decodeVin(vin: string, modelYear?: number): Promise<VpicRe
     series: clean(r.Series),
     trim: clean(r.Trim),
     bodyClass: clean(r.BodyClass),
+    displacementL: clean(r.DisplacementL),
+    engineCylinders: clean(r.EngineCylinders),
+    fuelType: clean(r.FuelTypePrimary),
     errorCode: clean(r.ErrorCode) ?? "",
     errorText: clean(r.ErrorText) ?? "",
   };

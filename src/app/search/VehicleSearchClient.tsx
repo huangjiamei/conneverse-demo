@@ -12,7 +12,7 @@
  * 改传 baseVehicleId, matcher 的 compat_filter 就不会带 Trim 段。
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Loader2,
   Search,
@@ -43,6 +43,17 @@ const POPULAR = [
 type YearOpt = { id: number };
 type NamedOpt = { id: number; name: string };
 type SubModelOpt = { id: number; name: string; baseVehicleId: number; vehicleId: number };
+// /api/vehicles/config 的返回 —— 选完 Y/M/M/(sub) 后拉该车可选的 engine / drive。
+type EngineOpt = {
+  engineConfigId: number;
+  label: string;
+  liter: string | null;
+  cylinders: string | null;
+  fuelType: string;
+};
+type DriveOpt = { driveTypeId: number; label: string };
+// VIN 解出的发动机结构分量, 用来把 VIN 唯一匹配到 EngineOpt 做预选 (匹配不唯一就退回手选)。
+type VinEngineHint = { liter: number | null; cyl: string | null; fuel: string | null };
 
 // SubModel 下拉里 "All" 那一项的 option value (真实 sub-model 用数字 id)
 const ALL_SUBMODELS = "all";
@@ -69,6 +80,9 @@ type VinDecoded = {
   series: string | null;
   trim: string | null;
   bodyClass: string | null;
+  displacementL: string | null;
+  engineCylinders: string | null;
+  fuelType: string | null;
   clean: boolean;
   errorText: string | null;
 };
@@ -158,6 +172,17 @@ export default function VehicleSearchClient({
   const [modelId, setModelId] = useState<number | null>(null);
   const [subSelection, setSubSelection] = useState<SubModelSelection | null>(null);
 
+  // Engine / Drive —— 选完车 (vehicleId 或 baseVehicleId) 后拉 /api/vehicles/config。
+  // 单值自动选中; 多值让用户挑 (发动机 48% 一对多, 是常态)。留空 = 不加这维, 不卡提交。
+  const [engines, setEngines] = useState<EngineOpt[]>([]);
+  const [drives, setDrives] = useState<DriveOpt[]>([]);
+  const [engineConfigId, setEngineConfigId] = useState<number | null>(null);
+  const [driveTypeId, setDriveTypeId] = useState<number | null>(null);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  // VIN 解出的发动机提示 (一次性): config 到货后若能唯一匹配就预选 engine, 否则手选。
+  // 用 ref 不触发额外渲染/effect —— 在 subSelection 变化的 effect 里读取后即清。
+  const vinEngineHintRef = useRef<VinEngineHint | null>(null);
+
   // 车辆选择器: 两个互斥 tab (下拉 / VIN), 默认下拉
   const [vehicleTab, setVehicleTab] = useState<VehicleTab>("manual");
 
@@ -227,6 +252,56 @@ export default function VehicleSearchClient({
       .then((data: TreeCategory[]) => setTree(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
+
+  // 车辆一变 (选到 submodel / 选 All / VIN 预填 / Popular) 就拉该车的 engine·drive 候选。
+  // 手动、VIN、Popular 三条路径都最终落在 subSelection 上, 所以只挂它一个依赖即可统一覆盖。
+  useEffect(() => {
+    if (!subSelection) {
+      setEngines([]);
+      setDrives([]);
+      setEngineConfigId(null);
+      setDriveTypeId(null);
+      setLoadingConfig(false);
+      return;
+    }
+    const qs =
+      subSelection.kind === "one"
+        ? `vehicleId=${subSelection.opt.vehicleId}`
+        : `baseVehicleId=${subSelection.baseVehicleId}`;
+    let cancelled = false;
+    setLoadingConfig(true);
+    setEngineConfigId(null);
+    setDriveTypeId(null);
+    fetch(`/api/vehicles/config?${qs}`)
+      .then((r) => r.json())
+      .then((d: { engines: EngineOpt[]; drives: DriveOpt[] }) => {
+        if (cancelled) return;
+        const eng = d.engines ?? [];
+        const drv = d.drives ?? [];
+        setEngines(eng);
+        setDrives(drv);
+        // 单值自动选中; engine 多值时用 VIN 提示唯一匹配预选, 匹配不唯一就留空手选。
+        if (eng.length === 1) setEngineConfigId(eng[0].engineConfigId);
+        else {
+          const hint = vinEngineHintRef.current;
+          const m = hint ? uniqueEngineMatch(eng, hint) : null;
+          if (m) setEngineConfigId(m.engineConfigId);
+        }
+        if (drv.length === 1) setDriveTypeId(drv[0].driveTypeId);
+        vinEngineHintRef.current = null; // 一次性用完即清
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEngines([]);
+        setDrives([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingConfig(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subSelection]);
 
   // 搜索框 (= partDescription) debounce 300ms → /api/parts/search。
   // 已选中 Part 时不搜 (编辑框会先清 selectedPartId, 从而重新触发)。
@@ -397,10 +472,11 @@ export default function VehicleSearchClient({
       ? scopeCat.name
       : "All categories";
 
-  // 用户一动下拉, VIN 那边的提示就过期了
+  // 用户一动下拉, VIN 那边的提示 (和一次性的 engine 预选提示) 就过期了
   function clearVinFeedback() {
     setVinFailure(null);
     setVinCaution(null);
+    vinEngineHintRef.current = null;
   }
 
   function selectYear(newYear: number | null) {
@@ -473,9 +549,23 @@ export default function VehicleSearchClient({
       : subSelection.kind === "all"
         ? "All submodels"
         : subSelection.opt.name;
+  // 已选中的 engine / drive (可选) —— 追加进摘要, 让用户看到选择生效了。
+  // 选完即时更新 (config effect 在拉列表, 这里跟着 state 变); 折叠 chip 用同一份。
+  const selectedEngineLabel =
+    engineConfigId == null
+      ? null
+      : (engines.find((e) => e.engineConfigId === engineConfigId)?.label ?? null);
+  const selectedDriveLabel =
+    driveTypeId == null
+      ? null
+      : (drives.find((d) => d.driveTypeId === driveTypeId)?.label ?? null);
+  // 括号内: sub-model · engine · drive, 哪个有值显哪个 (sub-model 选了车必有)。
+  const vehicleDetail = [subModelLabel, selectedEngineLabel, selectedDriveLabel]
+    .filter(Boolean)
+    .join(" · ");
   const capsuleLabel =
     subModelLabel && year && makeName && modelName
-      ? `${year} ${makeName} ${modelName} (${subModelLabel})`
+      ? `${year} ${makeName} ${modelName} (${vehicleDetail})`
       : "Select vehicle";
 
   /**
@@ -605,6 +695,10 @@ export default function VehicleSearchClient({
       ? null
       : `${stripErrorCode(data.decoded.errorText)} Please double-check the VIN.`;
 
+    // 记下 VIN 的发动机分量, 供 config 到货后唯一匹配预选 engine (一次性, 见上面的 effect)。
+    // 注意: 这不违反"不从 VIN 锁 engine" —— 只在候选里唯一匹配才预选, 对不上就照常手选。
+    vinEngineHintRef.current = vinEngineHintFrom(data.decoded);
+
     if (data.status === "resolved") {
       const v = data.vehicle;
       await applyVehicleIds(v.year, v.makeId, v.modelId); // sub-model 静默停在 All
@@ -656,6 +750,9 @@ export default function VehicleSearchClient({
     const submitSubCategoryId = usingScope
       ? (scopeSub?.subCategoryId ?? null)
       : null;
+    // Engine / Drive 是可选增量: 选了才带 (人读串)。本阶段 matcher 只透传收下, 暂不用于 eBay。
+    const selectedEngine = engines.find((e) => e.engineConfigId === engineConfigId) ?? null;
+    const selectedDrive = drives.find((d) => d.driveTypeId === driveTypeId) ?? null;
     setError(null);
     setSearching(true);
     setResult(null);
@@ -669,6 +766,8 @@ export default function VehicleSearchClient({
           ...(subSelection.kind === "one"
             ? { vehicleId: subSelection.opt.vehicleId }
             : { baseVehicleId: subSelection.baseVehicleId }),
+          ...(selectedEngine ? { engine: selectedEngine.label } : {}),
+          ...(selectedDrive ? { drive: selectedDrive.label } : {}),
           partDescription,
           partNumber: partNumber || null,
           preset,
@@ -911,6 +1010,38 @@ export default function VehicleSearchClient({
                           ...submodels.map((s) => ({ value: s.id, label: s.name })),
                         ]}
                       />
+                      {/* Engine —— 选完车才出现。单发动机自动选中并只读; 多发动机 (常态)
+                          必须手选, VIN 能唯一匹配时已预选。留空不卡提交。 */}
+                      {subSelection != null && (loadingConfig || engines.length > 0) && (
+                        <Dropdown
+                          label="Engine"
+                          loading={loadingConfig}
+                          disabled={loadingConfig || engines.length <= 1}
+                          value={engineConfigId ?? ""}
+                          onChange={(v) => setEngineConfigId(v ? Number(v) : null)}
+                          placeholder={engines.length > 1 ? "Select engine" : "—"}
+                          hidePlaceholder={engines.length === 1}
+                          options={engines.map((e) => ({
+                            value: e.engineConfigId,
+                            label: e.label,
+                          }))}
+                        />
+                      )}
+                      {/* Drive —— 只有多值才显 (单值静默自动选中并照常提交)。 */}
+                      {subSelection != null && drives.length > 1 && (
+                        <Dropdown
+                          label="Drive"
+                          loading={false}
+                          disabled={false}
+                          value={driveTypeId ?? ""}
+                          onChange={(v) => setDriveTypeId(v ? Number(v) : null)}
+                          placeholder="Select drive"
+                          options={drives.map((d) => ({
+                            value: d.driveTypeId,
+                            label: d.label,
+                          }))}
+                        />
+                      )}
                     </div>
 
                     {/* Done */}
@@ -1403,6 +1534,39 @@ export default function VehicleSearchClient({
 // ============================================================
 // 小工具
 // ============================================================
+
+/** vPIC 的发动机字段 → 匹配用的结构提示。缺排量就返回 null (没排量没法唯一匹配)。 */
+function vinEngineHintFrom(d: VinDecoded): VinEngineHint | null {
+  const liter = d.displacementL ? Number.parseFloat(d.displacementL) : NaN;
+  if (!Number.isFinite(liter)) return null;
+  const f = (d.fuelType ?? "").toLowerCase();
+  const fuel = f.includes("diesel")
+    ? "DIESEL"
+    : f.includes("flex")
+      ? "FLEX"
+      : f.includes("gas") // "Gasoline" / "Gas"
+        ? "GAS"
+        : null; // 电动/混动等不强求, 交给手选
+  return { liter, cyl: d.engineCylinders, fuel };
+}
+
+/**
+ * 在候选 engines 里按 VIN 提示 (排量 + 缸数 + 燃料) 找唯一匹配。
+ * 命中恰好一个才返回 (预选); 0 个或多个都返回 null → 用户手选 (即"解不出就正常多选")。
+ */
+function uniqueEngineMatch(engines: EngineOpt[], hint: VinEngineHint): EngineOpt | null {
+  const matches = engines.filter((e) => {
+    if (hint.liter != null) {
+      if (e.liter == null) return false;
+      const el = Number.parseFloat(e.liter);
+      if (!Number.isFinite(el) || Math.abs(el - hint.liter) > 0.05) return false;
+    }
+    if (hint.cyl && e.cylinders && e.cylinders !== hint.cyl) return false;
+    if (hint.fuel && e.fuelType && e.fuelType.toUpperCase() !== hint.fuel) return false;
+    return true;
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
 
 /** fetch + 非 2xx 抛错 (级联那几个列表接口都是纯数组, 拿不到就该报错而不是渲染空列表) */
 async function getJson<T>(url: string): Promise<T> {

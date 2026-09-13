@@ -75,6 +75,10 @@ export async function GET(req: Request) {
     series: decode.series,
     trim: decode.trim,
     bodyClass: decode.bodyClass,
+    // 发动机结构分量 —— 只用于前端把 VIN 唯一匹配到 VCdb engine 做预选 (不参与 model 解析)
+    displacementL: decode.displacementL,
+    engineCylinders: decode.engineCylinders,
+    fuelType: decode.fuelType,
     clean: isCleanDecode(decode),
     errorText: isCleanDecode(decode) ? null : decode.errorText,
   };

@@ -69,6 +69,20 @@ function modelKey(raw: string): string {
 }
 
 /**
+ * 剥掉 modelKey 尾部的 4MATIC 驱动标记。
+ *
+ * vPIC 给奔驰的 Trim 常带 4MATIC 尾缀 (如 "C300-4M" / "C300 4MATIC"), 归一化后
+ * 是 "C3004M" / "C3004MATIC"; 而 VCdb 的 model 只叫 "C300" —— 4MATIC 是驱动 (走
+ * DriveType), 不进 model 名。只在下面 Trim→model 兜底里用, 剥完再比。
+ *
+ * 只剥尾缀: "C450-4M Sport AMG" (=> "C4504MSPORTAMG") 不会被救 —— 那是厂家改名
+ * (C450→C43 AMG), 不在本函数职责内。
+ */
+function stripDriveSuffix(key: string): string {
+  return key.replace(/4MATIC$/, "").replace(/4M$/, "");
+}
+
+/**
  * 特例表: key 和去噪都救不了的车型。左边写 modelKey() 之后的形式。
  * 只收「一对一确定」的映射 —— 像 "SILVERADO" 这种同时对应 1500/2500/3500 的
  * 绝不能写进来, 让它走 ambiguous 交给用户点。
@@ -233,7 +247,16 @@ export async function resolveToBaseVehicle(input: {
   // 任何 model, 自然落空, 不会把人带偏。
   if (narrowed.length === 0 && trim) {
     const tKey = modelKey(trim);
-    const byTrim = tKey ? models.filter((m) => modelKey(m.name) === tKey) : [];
+    let byTrim = tKey ? models.filter((m) => modelKey(m.name) === tKey) : [];
+    // 奔驰: vPIC 把动力型号塞进 Trim 且常带 4MATIC 尾缀 (C300-4M), VCdb model 只叫 C300。
+    // 直接相等没中时, 剥掉 4MATIC 尾缀再试一次。只影响没能靠 model 直连的车 (基本是奔驰),
+    // BMW/Audi/Acura 的 model 已直连, 到不了这里, 路径不变。
+    if (byTrim.length === 0 && tKey) {
+      const stripped = stripDriveSuffix(tKey);
+      if (stripped && stripped !== tKey) {
+        byTrim = models.filter((m) => modelKey(m.name) === stripped);
+      }
+    }
     // exact 此时必为 false → confidence 自动算成 fuzzy, 文案会更保守
     if (byTrim.length === 1) narrowed = byTrim;
   }

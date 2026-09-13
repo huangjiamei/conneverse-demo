@@ -31,6 +31,10 @@ const MATCHER_URL = process.env.MATCHER_URL ?? "http://127.0.0.1:8001";
 type Body = {
   vehicleId?: number;
   baseVehicleId?: number;
+  // 采集侧新增: engine 人读串 (如 "2.0L L4 GAS")、drive (如 "AWD")。只透传给 matcher,
+  // 本阶段 matcher 收下但不使用 (不进任何 lane / compat 闸)。
+  engine?: string | null;
+  drive?: string | null;
   partDescription?: string;
   partNumber?: string | null;
   preset?: string;
@@ -220,6 +224,9 @@ export async function POST(req: Request) {
         : `${yearId} ${makeName} ${modelName}`,
       // 空串 = All submodels; matcher 据此决定 compat_filter 加不加 Trim 段
       sub_model: subModelName ?? "",
+      // 采集侧新增, 只透传 (有值才有意义, 无则空串): matcher 本阶段收下不用
+      engine: body.engine ?? "",
+      drive: body.drive ?? "",
     },
     part_description: partDescription ?? "",
     part_type: "",
